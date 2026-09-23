@@ -34,17 +34,36 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   `PartDesign::FeatureAdditivePython` in the Body's feature chain, like a
   Pad. It absorbs its sketch the way a Pad does, and double-clicking it
   reopens the wizard. The internal steps never appear in the tree.
-- **Build sequence, in memory on every recompute:** build one boss in a
-  local frame (base on the origin, axis +Z) → for each non-ignored point:
-  copy it, rotate it about its own axis by that instance's offset, and
-  place it at the point in the sketch's orientation → fuse all copies
-  into the Body's previous shape in one boolean. Nothing is stored between
-  recomputes, so nothing depends on FreeCAD's fragile topological names.
+- **Build sequence, in memory on every recompute.** Nothing is stored
+  between recomputes, so nothing depends on FreeCAD's fragile topological
+  names; edges to fillet are found by geometry, never by name.
+  1. Template (`boss/geometry.py`), in a local frame (base on the origin,
+     axis +Z): drafted boss → all gussets at once (profile extruded along
+     the gusset angle, no pattern) → gussets cut off below z = 0 and above
+     their height cap → gusset-to-boss fillets → inset → top fillet on the
+     boss's top rim.
+  2. In the Body (`boss/feature.py`): for each non-ignored point, copy the
+     template, rotate it about its axis by the instance's offset, and place
+     it with the sketch's placement, so the sketch normal is the boss axis
+     → fuse all copies into the Body's previous shape in one boolean →
+     base fillet on the fused result → bores cut into the fused result.
+- **Bore** is cut once, after the fuse, into every boss. It starts at the
+  boss top, narrows by the bore draft and ends flat. Its depth is at most
+  0.6 mm more than the boss height (larger values are clamped), so it may
+  cut into the part below the boss. A bore diameter of 0 means no bore.
+- **Gusset profile** (as in `ExampleFiles/BossWithGussets.FCStd`): drawn in
+  the vertical plane at the gusset's outer end, ridge arc top on z = 0,
+  arc width = gusset base thickness, sides drafted outward, bottom at
+  least 3 × boss height below z = 0, and always deep enough that the bottom
+  edge stays below z = 0 over the gusset's whole run (steep gussets would
+  otherwise leave a gap underneath and come loose from the boss).
 - **Per-instance rotation offset** (phase), stored per sketch point. It
   turns only gussets or ribs, since the boss body is round.
 - **Bore diameter** is measured at the bore entry (top). **Bore bottom**
   is flat.
-- **Gusset height** = base length × tan(angle), capped at boss height.
+- **Gusset height** = base length × tan(angle), capped 0.5 mm below the
+  boss top. That top 0.5 mm stays a plain round rim, so the top fillet
+  always runs around a single circle.
 - **Instances are keyed by sketch geometry id** (`getGeometryId`), not
   geometry index. Deleting an element renumbers every later index, but
   never an id. So: a new point gets a boss with no rotation, a moved point
@@ -55,20 +74,13 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 
 1. **Mounting plane.** The base fillet blends into the face the boss
    stands on. Is the sketch plane required to lie on that face?
-2. **Modelling approach per sub-feature.** Your spec. One option for the
-   round part of the boss (wall, draft, both fillets, bore, inset) is a
-   single 2D half-section with the fillets drawn as arcs, revolved once,
-   with no 3D fillet operations. Gussets need their own sequence,
-   especially the vertical fillet where a gusset meets the drafted wall.
-3. **Base fillet timing.** Blending into the body's face means either
-   building the fillet into the boss before the boolean, or filleting the
-   fused result afterwards.
-4. **Validation.** Which input combinations are impossible depends on the
+2. **Validation.** Which input combinations are impossible depends on the
    geometry, so it comes with the backend. The panel can then list
    problems live and block OK on errors.
 
 ## Not implemented yet
 
+- Gusset-to-boss and base fillets.
 - Rib settings (the `Ribs` support mode shows no fields yet).
 - Visual marking of ignored points in the 3D view. Once a live preview
   exists, ignored bosses simply disappear.

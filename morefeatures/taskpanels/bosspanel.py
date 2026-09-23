@@ -1,6 +1,7 @@
 # The boss wizard task panel: which sketch points get a boss, how each one is rotated,
 # and how the boss is shaped.
 
+import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
 from morefeatures import config, sketchpoints
@@ -16,14 +17,16 @@ TABLE_HEADERS = ("Boss", "Position", "Rotation")
 POINT_ID_ROLE = QtCore.Qt.UserRole
 MINIMUM_PICK_DISTANCE = 1.0
 MAX_ROTATION_OFFSET = 360.0
+MIN_VISIBLE_INSTANCE_ROWS = 4
 PICK_BUTTON_IDLE_TEXT = "Ignore instances..."
 PICK_BUTTON_ACTIVE_TEXT = "Done ignoring"
 
 
 class BossTaskPanel:
-    def __init__(self, sketch, body):
+    def __init__(self, sketch, body, existingFeature=None):
         self.sketch = sketch
         self.body = body
+        self.existingFeature = existingFeature
         self.sketchPoints = sketchpoints.readSketchPoints(sketch)
         self.ignoredPointIds = set()
         self.rotationOffsetsByPointId = {point.geometryId: 0.0 for point in self.sketchPoints}
@@ -32,7 +35,10 @@ class BossTaskPanel:
         self.pointPicker = pointpicker.PointPicker(self._togglePointNearest)
 
         self.parameterForm = fieldform.FieldForm(bossparameters.PARAMETER_FIELDS, self._onParametersChanged)
-        self.parameterForm.setValues(config.getLastBossParameters().toDict())
+        if existingFeature is None:
+            self.parameterForm.setValues(config.getLastBossParameters().toDict())
+        else:
+            self._loadRequest(builder.readRequest(existingFeature))
         self.gussetHeightLabel = QtWidgets.QLabel()
         self.parameterForm.widget.layout().addWidget(self.gussetHeightLabel)
 
@@ -40,24 +46,46 @@ class BossTaskPanel:
         self._fillInstanceTable()
         self._onParametersChanged()
 
+    @classmethod
+    def forExistingFeature(cls, bossFeature) -> "BossTaskPanel":
+        return cls(bossFeature.Sketch, bossFeature.getParentGeoFeatureGroup(), bossFeature)
+
     def accept(self) -> bool:
         self._stopPicking()
         parameters = self._currentParameters()
         config.setLastBossParameters(parameters)
-        builder.buildBosses(
-            builder.BossRequest(
-                self.sketch,
-                self.body,
-                parameters,
-                sorted(self.ignoredPointIds),
-                dict(self.rotationOffsetsByPointId),
-            )
+        request = builder.BossRequest(
+            self.sketch,
+            self.body,
+            parameters,
+            sorted(self.ignoredPointIds),
+            dict(self.rotationOffsetsByPointId),
         )
+        if self.existingFeature is None:
+            bossFeature = builder.buildBosses(request)
+        else:
+            bossFeature = builder.updateBosses(self.existingFeature, request)
+        self.sketch.ViewObject.Visibility = False
+        if bossFeature.BaseFeature is not None:
+            bossFeature.BaseFeature.ViewObject.Visibility = False
+        self._finishEditing()
         return True
 
     def reject(self) -> bool:
         self._stopPicking()
+        self._finishEditing()
         return True
+
+    def _loadRequest(self, request: builder.BossRequest) -> None:
+        self.parameterForm.setValues(request.parameters.toDict())
+        self.ignoredPointIds = set(request.ignoredPointIds) & set(self.rowsByPointId)
+        for pointId, rotationOffset in request.rotationOffsetsByPointId.items():
+            if pointId in self.rotationOffsetsByPointId:
+                self.rotationOffsetsByPointId[pointId] = rotationOffset
+
+    def _finishEditing(self) -> None:
+        if self.existingFeature is not None:
+            Gui.ActiveDocument.resetEdit()
 
     def _buildInstancesWidget(self) -> QtWidgets.QWidget:
         widget = QtWidgets.QWidget()
@@ -73,6 +101,7 @@ class BossTaskPanel:
             POSITION_COLUMN, QtWidgets.QHeaderView.Stretch
         )
         self.instanceTable.itemChanged.connect(self._onInstanceItemChanged)
+        self.instanceTable.setMinimumHeight(_tableHeightForRows(self.instanceTable, MIN_VISIBLE_INSTANCE_ROWS))
         layout.addWidget(self.instanceTable)
 
         self.instanceCountLabel = QtWidgets.QLabel()
@@ -99,17 +128,20 @@ class BossTaskPanel:
     def _fillInstanceTable(self) -> None:
         self.instanceTable.blockSignals(True)
         for row, point in enumerate(self.sketchPoints):
+            hasBoss = point.geometryId not in self.ignoredPointIds
             bossItem = QtWidgets.QTableWidgetItem("Point {0}".format(point.geometryIndex + 1))
             bossItem.setData(POINT_ID_ROLE, point.geometryId)
             bossItem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsUserCheckable)
-            bossItem.setCheckState(QtCore.Qt.Checked)
+            bossItem.setCheckState(QtCore.Qt.Checked if hasBoss else QtCore.Qt.Unchecked)
             self.instanceTable.setItem(row, BOSS_COLUMN, bossItem)
 
             positionItem = QtWidgets.QTableWidgetItem(_describeLocalPosition(point))
             positionItem.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
             self.instanceTable.setItem(row, POSITION_COLUMN, positionItem)
 
-            self.instanceTable.setCellWidget(row, ROTATION_COLUMN, self._createInstanceRotationEditor(point))
+            rotationEditor = self._createInstanceRotationEditor(point)
+            rotationEditor.setEnabled(hasBoss)
+            self.instanceTable.setCellWidget(row, ROTATION_COLUMN, rotationEditor)
         self.instanceTable.blockSignals(False)
         self.instanceTable.resizeColumnToContents(BOSS_COLUMN)
         self._refreshInstanceCount()
@@ -176,6 +208,7 @@ class BossTaskPanel:
         parameters = self._currentParameters()
         for field in bossparameters.PARAMETER_FIELDS:
             self.parameterForm.setFieldVisible(field.name, bossparameters.isFieldRelevant(parameters, field.name))
+        self.parameterForm.setFieldMaximum("boreDepth", parameters.maxBoreDepth)
         self.gussetHeightLabel.setVisible(parameters.hasGussets())
         self.gussetHeightLabel.setText(_describeGussetHeight(parameters))
 
@@ -192,10 +225,22 @@ def _createRotationEditor() -> QtWidgets.QDoubleSpinBox:
     return editor
 
 
+def _tableHeightForRows(table: QtWidgets.QTableWidget, rowCount: int) -> int:
+    return (
+        table.horizontalHeader().sizeHint().height()
+        + rowCount * table.verticalHeader().defaultSectionSize()
+        + 2 * table.frameWidth()
+    )
+
+
 def _describeLocalPosition(point: sketchpoints.SketchPoint) -> str:
     return "({0:.2f}, {1:.2f})".format(point.localPosition.x, point.localPosition.y)
 
 
 def _describeGussetHeight(parameters: bossparameters.BossParameters) -> str:
-    cappedNote = "  (capped at boss height)" if parameters.isGussetHeightCapped() else ""
+    cappedNote = (
+        "  (capped {0} mm below the boss top)".format(bossparameters.GUSSET_TOP_CLEARANCE)
+        if parameters.isGussetHeightCapped()
+        else ""
+    )
     return "Gusset height: {0:.2f} mm{1}".format(parameters.gussetHeight, cappedNote)

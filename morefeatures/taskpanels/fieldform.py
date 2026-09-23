@@ -37,6 +37,15 @@ class FieldForm:
             _writeEditor(editor, self._fieldsByName[name].kind, value)
             editor.blockSignals(False)
 
+    def setFieldMaximum(self, name: str, maximum: float) -> None:
+        editor = self._editors[name]
+        kind = self._fieldsByName[name].kind
+        editor.setProperty("maximum", maximum)
+        if _readEditor(editor, kind) > maximum:
+            editor.blockSignals(True)
+            _writeEditor(editor, kind, maximum)
+            editor.blockSignals(False)
+
     def setFieldVisible(self, name: str, isVisible: bool) -> None:
         self._labels[name].setVisible(isVisible)
         self._editors[name].setVisible(isVisible)

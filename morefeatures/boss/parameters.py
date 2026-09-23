@@ -13,6 +13,8 @@ SUPPORT_MODES = (SUPPORT_NONE, SUPPORT_GUSSETS, SUPPORT_RIBS)
 MAX_DRAFT_ANGLE = 45.0
 MIN_GUSSET_COUNT = 2
 MAX_GUSSET_COUNT = 4
+MAX_BORE_DEPTH_BEYOND_HEIGHT = 0.6
+GUSSET_TOP_CLEARANCE = 0.5
 
 BOSS_GROUP = "Boss"
 BORE_GROUP = "Bore"
@@ -22,34 +24,50 @@ SUPPORT_GROUP = "Supports"
 
 @dataclass
 class BossParameters:
-    baseDiameter: float = 8.0
-    height: float = 10.0
+    baseDiameter: float = 4.9
+    height: float = 5.6
     draftAngle: float = 1.0
-    baseFilletRadius: float = 1.0
-    topFilletRadius: float = 0.3
+    baseFilletRadius: float = 0.5
+    topFilletRadius: float = 0.2
 
-    boreDiameter: float = 3.0
-    boreDepth: float = 8.0
+    boreDiameter: float = 2.1
+    boreDepth: float = 5.8
     boreDraftAngle: float = 0.5
 
     hasBoreInset: bool = False
-    insetDiameter: float = 4.5
-    insetDepth: float = 1.0
+    insetDiameter: float = 2.6
+    insetDepth: float = 0.25
 
-    supportMode: str = SUPPORT_NONE
+    supportMode: str = SUPPORT_GUSSETS
     gussetCount: int = 4
-    gussetAngle: float = 60.0
-    gussetDraftAngle: float = 1.0
-    gussetBaseThickness: float = 1.5
-    gussetBaseLength: float = 4.0
+    gussetAngle: float = 45.0
+    gussetDraftAngle: float = 2.0
+    gussetBaseThickness: float = 1.2
+    gussetBaseLength: float = 2.5
     gussetFilletRadius: float = 0.5
 
     @property
+    def maxBoreDepth(self) -> float:
+        return self.height + MAX_BORE_DEPTH_BEYOND_HEIGHT
+
+    @property
+    def effectiveBoreDepth(self) -> float:
+        return min(self.boreDepth, self.maxBoreDepth)
+
+    def hasBore(self) -> bool:
+        return self.boreDiameter > 0.0 and self.boreDepth > 0.0
+
+    @property
+    def maxGussetHeight(self) -> float:
+        # The rim stays free of gussets so the top fillet runs round a plain circle.
+        return max(self.height - GUSSET_TOP_CLEARANCE, 0.0)
+
+    @property
     def gussetHeight(self) -> float:
-        return min(self._uncappedGussetHeight(), self.height)
+        return min(self._uncappedGussetHeight(), self.maxGussetHeight)
 
     def isGussetHeightCapped(self) -> bool:
-        return self._uncappedGussetHeight() > self.height
+        return self._uncappedGussetHeight() > self.maxGussetHeight
 
     def _uncappedGussetHeight(self) -> float:
         return self.gussetBaseLength * math.tan(math.radians(self.gussetAngle))
@@ -69,7 +87,10 @@ PARAMETER_FIELDS = (
     ParameterField("topFilletRadius", "Top fillet radius", BOSS_GROUP, LENGTH),
     ParameterField("boreDiameter", "Bore diameter", BORE_GROUP, LENGTH, tooltip="Measured at the bore entry."),
     ParameterField(
-        "boreDepth", "Bore depth", BORE_GROUP, LENGTH, tooltip="Measured from the bore entry to its flat bottom."
+        "boreDepth", "Bore depth", BORE_GROUP, LENGTH,
+        tooltip="Measured from the bore entry to its flat bottom. At most {0} mm deeper than the boss is high.".format(
+            MAX_BORE_DEPTH_BEYOND_HEIGHT
+        ),
     ),
     ParameterField("boreDraftAngle", "Bore draft angle", BORE_GROUP, ANGLE, 0.0, MAX_DRAFT_ANGLE),
     ParameterField("hasBoreInset", "Enable bore inset", INSET_GROUP, FLAG),

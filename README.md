@@ -4,10 +4,12 @@ Wizards that turn multi-step modelling chores into one parametric feature,
 configured in a task panel the way SolidWorks feature wizards are.
 
 Status: the **Boss Wizard** task panel is in place — point selection,
-ignoring instances, and every boss/bore/inset/gusset setting. The CAD
-backend is not built yet: pressing OK only logs the collected request to
-the Report view. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for
-where the backend plugs in and what is still to be decided.
+ignoring instances, and every boss/bore/inset/gusset setting. Pressing OK
+creates one `Boss` feature in the Body: drafted boss, gussets, inset and
+top fillet, placed on every point, fused into the part and bored.
+Double-clicking the feature reopens the wizard to edit it. The
+gusset-to-boss and base fillets are not built yet. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
+sequence and what is still to be decided.
 
 ## Boss Wizard
 
@@ -23,7 +25,7 @@ PartDesign only.
    Each row has a rotation offset that turns that boss's gussets/ribs;
    **Apply to all** sets them in one go.
 4. Set up the boss and press OK. The wizard remembers the values for next
-   time.
+   time. Double-click the `Boss` feature in the tree to change it later.
 
 ## Layout
 
@@ -39,8 +41,13 @@ PartDesign only.
   - `taskpanels/` - task panels. `fieldform.py` builds a form from a field
     schema, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel.
+  - `featureproperties.py` - mirrors a field schema onto a document object
+    as FreeCAD properties.
   - `boss/` - everything specific to the boss feature: `parameters.py` (the
-    inputs and their schema) and `builder.py` (the backend seam, a stub).
+    inputs and their schema), `geometry.py` (the in-memory boss template),
+    `feature.py` (the PartDesign feature that places and fuses it),
+    `viewprovider.py` (its look in the GUI) and `builder.py` (the seam the
+    panel calls).
 - `Resources/icons/` - workbench and command icons.
 - `dev/reload.py` - reload `morefeatures/` modules without restarting.
 - `package.xml` - Addon Manager metadata.

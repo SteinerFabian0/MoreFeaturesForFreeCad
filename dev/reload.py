@@ -6,17 +6,21 @@
 import importlib
 
 import morefeatures
-from morefeatures import config, registry, schema, sketchpoints
-from morefeatures.boss import builder, parameters
+from morefeatures import config, featureproperties, registry, schema, sketchpoints
+from morefeatures.boss import builder, feature, geometry, parameters, viewprovider
 from morefeatures.commands import bosswizard
 from morefeatures.taskpanels import bosspanel, fieldform, pointpicker
 
 for module in (
     morefeatures,
     schema,
+    featureproperties,
     parameters,
     config,
     sketchpoints,
+    geometry,
+    viewprovider,
+    feature,
     builder,
     fieldform,
     pointpicker,
