@@ -13,6 +13,8 @@ SUPPORT_MODES = (SUPPORT_NONE, SUPPORT_GUSSETS, SUPPORT_RIBS)
 MAX_DRAFT_ANGLE = 45.0
 MIN_GUSSET_COUNT = 2
 MAX_GUSSET_COUNT = 4
+MIN_GUSSET_ANGLE = 20.0
+MAX_GUSSET_ANGLE = 70.0
 MAX_BORE_DEPTH_BEYOND_HEIGHT = 0.6
 GUSSET_TOP_CLEARANCE = 0.5
 
@@ -44,7 +46,6 @@ class BossParameters:
     gussetDraftAngle: float = 2.0
     gussetBaseThickness: float = 1.2
     gussetBaseLength: float = 2.5
-    gussetFilletRadius: float = 0.5
 
     @property
     def maxBoreDepth(self) -> float:
@@ -83,7 +84,11 @@ PARAMETER_FIELDS = (
     ParameterField("baseDiameter", "Base diameter", BOSS_GROUP, LENGTH, 0.01),
     ParameterField("height", "Height", BOSS_GROUP, LENGTH, 0.01),
     ParameterField("draftAngle", "Draft angle", BOSS_GROUP, ANGLE, 0.0, MAX_DRAFT_ANGLE),
-    ParameterField("baseFilletRadius", "Base fillet radius", BOSS_GROUP, LENGTH),
+    ParameterField(
+        "baseFilletRadius", "Boss base fillet", BOSS_GROUP, LENGTH,
+        tooltip="Rounds the boss into the face it stands on. With gussets, the same radius also rounds "
+        "the gussets into that face and into the boss.",
+    ),
     ParameterField("topFilletRadius", "Top fillet radius", BOSS_GROUP, LENGTH),
     ParameterField("boreDiameter", "Bore diameter", BORE_GROUP, LENGTH, tooltip="Measured at the bore entry."),
     ParameterField(
@@ -101,7 +106,7 @@ PARAMETER_FIELDS = (
     ParameterField("supportMode", "Supports", SUPPORT_GROUP, CHOICE, choices=SUPPORT_MODES),
     ParameterField("gussetCount", "Gusset count", SUPPORT_GROUP, COUNT, MIN_GUSSET_COUNT, MAX_GUSSET_COUNT),
     ParameterField(
-        "gussetAngle", "Gusset angle", SUPPORT_GROUP, ANGLE, 0.01, 89.99,
+        "gussetAngle", "Gusset angle", SUPPORT_GROUP, ANGLE, MIN_GUSSET_ANGLE, MAX_GUSSET_ANGLE,
         tooltip="Measured from the base plane; steeper gussets take less horizontal space.",
     ),
     ParameterField("gussetDraftAngle", "Gusset draft angle", SUPPORT_GROUP, ANGLE, 0.0, MAX_DRAFT_ANGLE),
@@ -110,7 +115,6 @@ PARAMETER_FIELDS = (
         "gussetBaseLength", "Gusset base length", SUPPORT_GROUP, LENGTH,
         tooltip="How far the gusset reaches outward from the boss base diameter.",
     ),
-    ParameterField("gussetFilletRadius", "Gusset vertical fillet radius", SUPPORT_GROUP, LENGTH),
 )
 
 INSET_FIELD_NAMES = ("insetDiameter", "insetDepth")

@@ -40,13 +40,12 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   1. Template (`boss/geometry.py`), in a local frame (base on the origin,
      axis +Z): drafted boss → all gussets at once (profile extruded along
      the gusset angle, no pattern) → gussets cut off below z = 0 and above
-     their height cap → gusset-to-boss fillets → inset → top fillet on the
-     boss's top rim.
+     their height cap → inset → top fillet on the boss's top rim.
   2. In the Body (`boss/feature.py`): for each non-ignored point, copy the
      template, rotate it about its axis by the instance's offset, and place
      it with the sketch's placement, so the sketch normal is the boss axis
      → fuse all copies into the Body's previous shape in one boolean →
-     base fillet on the fused result → bores cut into the fused result.
+     boss base fillet on the fused result → bores cut into the fused result.
 - **Bore** is cut once, after the fuse, into every boss. It starts at the
   boss top, narrows by the bore draft and ends flat. Its depth is at most
   0.6 mm more than the boss height (larger values are clamped), so it may
@@ -61,6 +60,18 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   turns only gussets or ribs, since the boss body is round.
 - **Bore diameter** is measured at the bore entry (top). **Bore bottom**
   is flat.
+- **Boss base fillet** is one fillet with one radius, on the fused
+  result: the chain where each boss (and its gussets) meets the face it
+  stands on, plus both flat sides of every gusset where they meet the boss
+  wall. Separate base and gusset fillets fail when their radii are equal,
+  since each would roll into the other's rounded corner. Edges are found
+  by geometry: the placed template footprint bordering an upward-facing
+  flat face in the sketch plane, and edges between the boss's round wall
+  and a sloped flat face (exactly two per gusset, else an error). The
+  sketch must lie on the face the bosses stand on. A boss hanging over the
+  part's edge leaves an open chain, which does not fillet.
+- **Gusset angle** is 20–70°. Shallower, only the rounded ridge reaches the
+  boss; steeper, drafted gussets grow wide enough to swallow the boss wall.
 - **Gusset height** = base length × tan(angle), capped 0.5 mm below the
   boss top. That top 0.5 mm stays a plain round rim, so the top fillet
   always runs around a single circle.
@@ -72,15 +83,12 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 
 ### Still open
 
-1. **Mounting plane.** The base fillet blends into the face the boss
-   stands on. Is the sketch plane required to lie on that face?
-2. **Validation.** Which input combinations are impossible depends on the
+1. **Validation.** Which input combinations are impossible depends on the
    geometry, so it comes with the backend. The panel can then list
    problems live and block OK on errors.
 
 ## Not implemented yet
 
-- Gusset-to-boss and base fillets.
 - Rib settings (the `Ribs` support mode shows no fields yet).
 - Visual marking of ignored points in the 3D view. Once a live preview
   exists, ignored bosses simply disappear.

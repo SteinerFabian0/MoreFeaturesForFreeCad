@@ -6,9 +6,8 @@ configured in a task panel the way SolidWorks feature wizards are.
 Status: the **Boss Wizard** task panel is in place — point selection,
 ignoring instances, and every boss/bore/inset/gusset setting. Pressing OK
 creates one `Boss` feature in the Body: drafted boss, gussets, inset and
-top fillet, placed on every point, fused into the part and bored.
-Double-clicking the feature reopens the wizard to edit it. The
-gusset-to-boss and base fillets are not built yet. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
+top fillet, placed on every point, fused into the part, filleted into it
+and bored. Double-clicking the feature reopens the wizard to edit it. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
 sequence and what is still to be decided.
 
 ## Boss Wizard
@@ -46,6 +45,7 @@ PartDesign only.
   - `boss/` - everything specific to the boss feature: `parameters.py` (the
     inputs and their schema), `geometry.py` (the in-memory boss template),
     `feature.py` (the PartDesign feature that places and fuses it),
+    `basefillet.py` (the boss base fillet on the fused part),
     `viewprovider.py` (its look in the GUI) and `builder.py` (the seam the
     panel calls).
 - `Resources/icons/` - workbench and command icons.

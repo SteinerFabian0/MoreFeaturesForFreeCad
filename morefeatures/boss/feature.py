@@ -5,7 +5,7 @@ import FreeCAD as App
 import Part
 
 from morefeatures import featureproperties, sketchpoints
-from morefeatures.boss import geometry, viewprovider
+from morefeatures.boss import basefillet, geometry, viewprovider
 from morefeatures.boss import parameters as bossparameters
 
 FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
@@ -30,15 +30,21 @@ class BossFeature:
 
     def execute(self, obj) -> None:
         parameters = readParameters(obj)
-        matrices = [placement.toMatrix() for placement in _instancePlacements(obj)]
+        placements = _instancePlacements(obj)
         template = geometry.buildBossTemplate(parameters)
-        bosses = [template.transformed(matrix) for matrix in matrices]
-        bores = []
-        if parameters.hasBore():
-            boreTool = geometry.buildBoreTool(parameters)
-            bores = [boreTool.transformed(matrix) for matrix in matrices]
+        bosses = [template.transformed(placement.toMatrix()) for placement in placements]
         obj.AddSubShape = Part.makeCompound(bosses)
-        obj.Shape = _fuseIntoBaseAndBore(obj, bosses, bores)
+        result = _fuseIntoBase(obj, bosses)
+        if bosses and obj.BaseFeature is not None and parameters.baseFilletRadius > 0.0:
+            gussetCount = parameters.gussetCount if parameters.hasGussets() else 0
+            result = basefillet.filletBossBases(
+                result, template, placements, gussetCount, parameters.baseFilletRadius
+            )
+        if bosses and parameters.hasBore():
+            boreTool = geometry.buildBoreTool(parameters)
+            # Bored after the fuse, so each bore may run on into the part below its boss.
+            result = result.cut([boreTool.transformed(placement.toMatrix()) for placement in placements])
+        obj.Shape = result.removeSplitter() if obj.Refine else result
 
     def dumps(self):
         return None
@@ -94,13 +100,7 @@ def _instancePlacements(obj) -> list:
     ]
 
 
-def _fuseIntoBaseAndBore(obj, bosses: list, bores: list) -> Part.Shape:
+def _fuseIntoBase(obj, bosses: list) -> Part.Shape:
     baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
     first, *others = baseShapes + bosses
-    if not others:
-        return first
-    # Bored after the fuse, so each bore may run on into the part below its boss.
-    result = first.fuse(others)
-    if bores:
-        result = result.cut(bores)
-    return result.removeSplitter() if obj.Refine else result
+    return first.fuse(others) if others else first

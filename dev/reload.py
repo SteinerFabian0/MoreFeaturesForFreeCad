@@ -7,7 +7,7 @@ import importlib
 
 import morefeatures
 from morefeatures import config, featureproperties, registry, schema, sketchpoints
-from morefeatures.boss import builder, feature, geometry, parameters, viewprovider
+from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
 from morefeatures.commands import bosswizard
 from morefeatures.taskpanels import bosspanel, fieldform, pointpicker
 
@@ -19,6 +19,7 @@ for module in (
     config,
     sketchpoints,
     geometry,
+    basefillet,
     viewprovider,
     feature,
     builder,

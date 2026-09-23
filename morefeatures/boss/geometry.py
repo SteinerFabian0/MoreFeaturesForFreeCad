@@ -108,20 +108,29 @@ def buildBoreTool(parameters: BossParameters) -> Part.Shape:
     return _makeFrustum(bottomRadius, overshootRadius, depth + CUT_OVERSHOOT, bottomPosition)
 
 
-def _filletTopEdge(boss: Part.Shape, parameters: BossParameters) -> Part.Shape:
-    topFace = _findTopFace(boss, parameters.height)
-    if topFace is None:
-        raise ValueError("The boss has no flat top left to fillet; the inset is as wide as the top.")
+def makeCheckedFillet(shape: Part.Shape, radius: float, edges: list, filletName: str) -> Part.Shape:
+    failure = "The {0} fillet radius {1} mm does not fit.".format(filletName, radius)
     try:
-        filleted = boss.makeFillet(parameters.topFilletRadius, topFace.OuterWire.Edges)
+        filleted = shape.makeFillet(radius, edges)
     except Part.OCCError as error:
-        raise ValueError(_describeFilletFailure(parameters)) from error
+        raise ValueError(failure) from error
     if not filleted.isValid():
-        raise ValueError(_describeFilletFailure(parameters))
+        raise ValueError(failure)
     return filleted
 
 
-def _findTopFace(boss: Part.Shape, height: float):
+def _filletTopEdge(boss: Part.Shape, parameters: BossParameters) -> Part.Shape:
+    topFace = _findFlatFaceAt(boss, parameters.height)
+    if topFace is None:
+        raise ValueError("The boss has no flat top left to fillet; the inset is as wide as the top.")
+    return makeCheckedFillet(boss, parameters.topFilletRadius, topFace.OuterWire.Edges, "top")
+
+
+def findFootprintWire(template: Part.Shape) -> Part.Wire:
+    return _findFlatFaceAt(template, 0.0).OuterWire
+
+
+def _findFlatFaceAt(boss: Part.Shape, height: float):
     return next(
         (
             face
@@ -132,10 +141,6 @@ def _findTopFace(boss: Part.Shape, height: float):
         ),
         None,
     )
-
-
-def _describeFilletFailure(parameters: BossParameters) -> str:
-    return "The top fillet radius {0} mm does not fit the boss top.".format(parameters.topFilletRadius)
 
 
 def _makeFrustum(bottomRadius: float, topRadius: float, height: float, position: Vector) -> Part.Shape:
