@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Building blocks every feature's parameter set is described with: the field schema
 # that drives the task panel editors.
 

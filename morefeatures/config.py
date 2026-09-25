@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Persisted settings via FreeCAD's parameter store: the last-used values of each wizard.
 
 import json

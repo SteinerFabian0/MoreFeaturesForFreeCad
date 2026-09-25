@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Mirrors a ParameterField schema onto a document object as FreeCAD properties, so every input
 # appears in the property view and is saved with the file.
 

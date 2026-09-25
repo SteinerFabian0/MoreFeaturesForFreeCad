@@ -1,5 +1,8 @@
-# The seam between the boss wizard's GUI and the CAD logic: the task panel hands over a complete
-# BossRequest, and this turns it into a boss feature in the Body, or reads one back for editing.
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
+# The seam between the boss wizard's GUI and the CAD logic: the task panel edits a boss feature
+# inside one transaction and hands over a complete BossRequest to commit into it.
 
 from dataclasses import dataclass
 
@@ -17,38 +20,57 @@ class BossRequest:
     parameters: BossParameters
     ignoredPointIds: list
     rotationOffsetsByPointId: dict
+    skippedGussetsByPointId: dict
 
 
-def buildBosses(request: BossRequest):
-    document = request.body.Document
-    document.openTransaction(CREATE_TRANSACTION_NAME)
-    bossFeature = feature.createBossFeature(request.body, request.sketch)
-    _writeRequest(bossFeature, request)
-    document.recompute()
-    document.commitTransaction()
+def createBosses(sketch, body, parameters: BossParameters):
+    """Opens a transaction that commitBosses() or abortBosses() must close."""
+    body.Document.openTransaction(CREATE_TRANSACTION_NAME)
+    bossFeature = feature.createBossFeature(body, sketch)
+    feature.writeParameters(bossFeature, parameters)
     return bossFeature
 
 
-def updateBosses(bossFeature, request: BossRequest):
+def beginEditingBosses(bossFeature) -> None:
+    """Opens a transaction that commitBosses() or abortBosses() must close."""
+    bossFeature.Document.openTransaction(EDIT_TRANSACTION_NAME)
+
+
+def previewBosses(bossFeature, request: BossRequest) -> None:
+    """Recomputes only the boss feature, as a quick preview; features after it catch up on commit."""
+    feature.setPreviewing(bossFeature, True)
+    _writeRequest(bossFeature, request)
+    bossFeature.recompute()
+
+
+def commitBosses(bossFeature, request: BossRequest) -> None:
     document = bossFeature.Document
-    document.openTransaction(EDIT_TRANSACTION_NAME)
+    feature.setPreviewing(bossFeature, False)
     _writeRequest(bossFeature, request)
     document.recompute()
     document.commitTransaction()
-    return bossFeature
+
+
+def abortBosses(bossFeature) -> None:
+    document = bossFeature.Document
+    feature.setPreviewing(bossFeature, False)
+    document.abortTransaction()
 
 
 def readRequest(bossFeature) -> BossRequest:
-    ignoredPointIds, rotationOffsetsByPointId = feature.readInstances(bossFeature)
+    ignoredPointIds, rotationOffsetsByPointId, skippedGussetsByPointId = feature.readInstances(bossFeature)
     return BossRequest(
         bossFeature.Sketch,
         bossFeature.getParentGeoFeatureGroup(),
         feature.readParameters(bossFeature),
         ignoredPointIds,
         rotationOffsetsByPointId,
+        skippedGussetsByPointId,
     )
 
 
 def _writeRequest(bossFeature, request: BossRequest) -> None:
-    feature.writeInstances(bossFeature, request.ignoredPointIds, request.rotationOffsetsByPointId)
+    feature.writeInstances(
+        bossFeature, request.ignoredPointIds, request.rotationOffsetsByPointId, request.skippedGussetsByPointId
+    )
     feature.writeParameters(bossFeature, request.parameters)

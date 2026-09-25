@@ -1,4 +1,17 @@
+# Allowlist: the Addon Manager installs a clone of this repo, so only the addon and its docs are tracked.
+/*
+!/.gitignore
+!/CLAUDE.md
+!/InitGui.py
+!/LICENSE
+!/README.md
+!/package.xml
+!/Resources/
+!/morefeatures/
+!/docs/
+!/dev/
+
 __pycache__/
-*.pyc
-.vscode/
-/ExampleFiles
+*.py[cod]
+*.FCBak
+*.FCStd1

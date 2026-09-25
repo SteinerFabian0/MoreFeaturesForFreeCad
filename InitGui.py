@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Bootstrap loaded by FreeCAD at GUI startup; real logic lives in morefeatures/.
 
 # FreeCAD execs this file with separate globals and locals dicts, so names

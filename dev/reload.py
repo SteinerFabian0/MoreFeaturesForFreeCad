@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Dev-only: run from the FreeCAD Python console to pick up morefeatures/ edits
 # without restarting FreeCAD. InitGui.py-level changes still need a restart, and
 # so do edits to a command class itself: FreeCAD keeps the instance registered at

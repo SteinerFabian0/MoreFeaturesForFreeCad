@@ -17,7 +17,7 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   as FreeCAD properties, so an input is declared once and appears in the
   panel, the property view and the saved file alike. A module-level
   check fails at import if the dataclass and the schema drift apart.
-- The panel never touches geometry. It hands `builder.buildBosses()` a
+- The panel never touches geometry. It hands `builder.commitBosses()` a
   `BossRequest` (sketch, target part, parameters, ignored point indices).
 - Adding a feature: a `<feature>/` package (parameters + builder), a
   command module, a panel, and one line in `registry.py`. Pieces that are
@@ -30,19 +30,35 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 
 - **PartDesign only.** The wizard works on a sketch inside a PartDesign
   Body, and that Body is the target. The Part workbench is not supported.
-- **One feature in the tree.** OK creates a single
+- **One feature in the tree.** The wizard edits a single
   `PartDesign::FeatureAdditivePython` in the Body's feature chain, like a
   Pad. It absorbs its sketch the way a Pad does, and double-clicking it
   reopens the wizard. The internal steps never appear in the tree.
+- **The feature exists while the wizard is open**, as with a Pad: opening
+  the wizard creates it (or, when editing, starts from it) inside one
+  transaction. OK commits that transaction, Cancel aborts it, so a new
+  feature disappears again and an edited one is restored. This is what
+  lets the length, angle and count inputs bind to the feature's
+  properties through `Gui.ExpressionBinding`, taking expressions (e.g. a
+  VarSet's variables) exactly like FreeCAD's own inputs. Checkboxes,
+  choices and the per-instance rotations and skipped gussets take plain
+  values only.
+- **Live preview while the wizard is open.** Every input change (debounced)
+  writes the request into the feature and recomputes that feature alone,
+  with a hidden, unsaved `IsPreviewing` flag set. In preview the feature
+  skips the fuse and the base fillet: its shape is a compound of the
+  base shape and the placed bosses, each bored on its own. The panel
+  shows only the boss feature meanwhile. OK clears the flag and runs the
+  full document recompute; Cancel restores the previous visibility.
 - **Build sequence, in memory on every recompute.** Nothing is stored
   between recomputes, so nothing depends on FreeCAD's fragile topological
   names; edges to fillet are found by geometry, never by name.
   1. Template (`boss/geometry.py`), in a local frame (base on the origin,
-     axis +Z): drafted boss → all gussets at once (profile extruded along
-     the gusset angle, no pattern) → gussets cut off below z = 0 and above
-     their height cap → inset → top fillet on the boss's top rim.
+     axis +Z): drafted boss → all kept gussets at once (profile extruded
+     along the gusset angle, no pattern) → gussets cut off below z = 0 and
+     above their height cap → inset → top fillet on the boss's top rim.
   2. In the Body (`boss/feature.py`): for each non-ignored point, copy the
-     template, rotate it about its axis by the instance's offset, and place
+     template for its skipped gussets, rotate it about its axis by the instance's offset, and place
      it with the sketch's placement, so the sketch normal is the boss axis
      → fuse all copies into the Body's previous shape in one boolean →
      boss base fillet on the fused result → bores cut into the fused result.
@@ -58,6 +74,13 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   otherwise leave a gap underneath and come loose from the boss).
 - **Per-instance rotation offset** (phase), stored per sketch point. It
   turns only gussets or ribs, since the boss body is round.
+- **Skipped gussets**, stored per sketch point as indices into the gusset
+  pattern. A skipped gusset leaves a gap; the others keep their angles.
+  Bosses leaving out the same gussets share one template, and the base
+  fillet expects two gusset-to-boss edges per kept gusset. A boss with
+  any gusset skipped is meant to be anchored by hand, so it gets only
+  those gusset-to-boss fillets, no base fillet. Indices beyond the gusset
+  count are dropped when the wizard commits.
 - **Bore diameter** is measured at the bore entry (top). **Bore bottom**
   is flat.
 - **Boss base fillet** is one fillet with one radius, on the fused
@@ -81,6 +104,16 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   keeps its settings, and a deleted point's settings are dropped. Only a
   point that is deleted and redrawn counts as new.
 
+- **Opened without the addon**, a feature's code does not load, so FreeCAD
+  would silently keep its last saved shape through every later change.
+  Each feature therefore carries a read-only `RequiredAddon` property bound
+  to an expression on `RequiresMoreFeaturesForFreeCadAddon`, a property the
+  addon adds on load and never saves. Without the addon the expression
+  cannot resolve, so the first recompute that reaches the feature marks it
+  invalid and stops everything after it. It still opens showing its saved
+  shape, and a copy saved without the addon stays broken, loudly, even once
+  the addon is back.
+
 ### Still open
 
 1. **Validation.** Which input combinations are impossible depends on the
@@ -90,7 +123,3 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 ## Not implemented yet
 
 - Rib settings (the `Ribs` support mode shows no fields yet).
-- Visual marking of ignored points in the 3D view. Once a live preview
-  exists, ignored bosses simply disappear.
-- Expression binding (`Gui.ExpressionBinding`) on the quantity fields.
-  It needs the feature object.

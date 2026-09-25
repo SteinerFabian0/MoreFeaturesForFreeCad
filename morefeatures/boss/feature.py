@@ -1,16 +1,23 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The Boss Wizard's document object: one PartDesign feature that rebuilds every boss from its
 # sketch points and parameters on each recompute.
 
 import FreeCAD as App
 import Part
 
-from morefeatures import featureproperties, sketchpoints
+from morefeatures import addoncheck, featureproperties, sketchpoints
 from morefeatures.boss import basefillet, geometry, viewprovider
 from morefeatures.boss import parameters as bossparameters
 
 FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
 FEATURE_NAME = "Boss"
 INSTANCES_GROUP = "Instances"
+SKIPPED_GUSSETS_PROPERTY = "SkippedGussets"
+PREVIEW_PROPERTY = "IsPreviewing"
+# An output property never marks the feature as needing a recompute when it changes.
+PROPERTY_OUTPUT = 8
 
 
 class BossFeature:
@@ -25,26 +32,26 @@ class BossFeature:
             INSTANCES_GROUP,
             "Rotation offset in degrees per point, keyed by the point's geometry id.",
         )
+        _addSkippedGussetsProperty(obj)
+        _addPreviewProperty(obj)
         featureproperties.addParameterProperties(obj, bossparameters.PARAMETER_FIELDS)
+        addoncheck.installAddonCheck(obj)
         obj.Proxy = self
+
+    def onDocumentRestored(self, obj) -> None:
+        _addSkippedGussetsProperty(obj)
+        _addPreviewProperty(obj)
+        addoncheck.installAddonCheck(obj)
 
     def execute(self, obj) -> None:
         parameters = readParameters(obj)
-        placements = _instancePlacements(obj)
-        template = geometry.buildBossTemplate(parameters)
-        bosses = [template.transformed(placement.toMatrix()) for placement in placements]
+        placedBosses = _placeBosses(obj, parameters)
+        bosses = [placedBoss.template.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses]
         obj.AddSubShape = Part.makeCompound(bosses)
-        result = _fuseIntoBase(obj, bosses)
-        if bosses and obj.BaseFeature is not None and parameters.baseFilletRadius > 0.0:
-            gussetCount = parameters.gussetCount if parameters.hasGussets() else 0
-            result = basefillet.filletBossBases(
-                result, template, placements, gussetCount, parameters.baseFilletRadius
-            )
-        if bosses and parameters.hasBore():
-            boreTool = geometry.buildBoreTool(parameters)
-            # Bored after the fuse, so each bore may run on into the part below its boss.
-            result = result.cut([boreTool.transformed(placement.toMatrix()) for placement in placements])
-        obj.Shape = result.removeSplitter() if obj.Refine else result
+        if getattr(obj, PREVIEW_PROPERTY):
+            obj.Shape = _buildPreview(obj, parameters, placedBosses, bosses)
+        else:
+            obj.Shape = _buildFinalShape(obj, parameters, placedBosses, bosses)
 
     def dumps(self):
         return None
@@ -64,15 +71,31 @@ def createBossFeature(body, sketch):
     return obj
 
 
-def writeInstances(obj, ignoredPointIds: list, rotationOffsetsByPointId: dict) -> None:
+def setPreviewing(obj, isPreviewing: bool) -> None:
+    setattr(obj, PREVIEW_PROPERTY, isPreviewing)
+
+
+def writeInstances(
+    obj, ignoredPointIds: list, rotationOffsetsByPointId: dict, skippedGussetsByPointId: dict
+) -> None:
     obj.IgnoredPointIds = list(ignoredPointIds)
     # Keys are strings because the property is saved as JSON, which has no integer keys.
     obj.RotationOffsets = {str(pointId): offset for pointId, offset in rotationOffsetsByPointId.items()}
+    setattr(
+        obj,
+        SKIPPED_GUSSETS_PROPERTY,
+        {str(pointId): sorted(indices) for pointId, indices in skippedGussetsByPointId.items() if indices},
+    )
 
 
 def readInstances(obj) -> tuple:
     rotationOffsets = obj.RotationOffsets or {}
-    return list(obj.IgnoredPointIds), {int(pointId): offset for pointId, offset in rotationOffsets.items()}
+    skippedGussets = getattr(obj, SKIPPED_GUSSETS_PROPERTY) or {}
+    return (
+        list(obj.IgnoredPointIds),
+        {int(pointId): offset for pointId, offset in rotationOffsets.items()},
+        {int(pointId): set(indices) for pointId, indices in skippedGussets.items()},
+    )
 
 
 def writeParameters(obj, parameters: bossparameters.BossParameters) -> None:
@@ -85,19 +108,77 @@ def readParameters(obj) -> bossparameters.BossParameters:
     )
 
 
-def _instancePlacements(obj) -> list:
+def _addSkippedGussetsProperty(obj) -> None:
+    # Files saved before gussets could be skipped lack this property.
+    if SKIPPED_GUSSETS_PROPERTY not in obj.PropertiesList:
+        obj.addProperty(
+            "App::PropertyPythonObject",
+            SKIPPED_GUSSETS_PROPERTY,
+            INSTANCES_GROUP,
+            "Indices of the gussets left out per point, keyed by the point's geometry id.",
+        )
+
+
+def _addPreviewProperty(obj) -> None:
+    obj.addProperty(
+        "App::PropertyBool",
+        PREVIEW_PROPERTY,
+        addoncheck.BASE_GROUP,
+        "",
+        addoncheck.PROPERTY_HIDDEN | PROPERTY_OUTPUT | addoncheck.PROPERTY_NOT_SAVED,
+    )
+
+
+def _buildFinalShape(obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list) -> Part.Shape:
+    result = _fuseIntoBase(obj, bosses)
+    if bosses and obj.BaseFeature is not None and parameters.baseFilletRadius > 0.0:
+        result = basefillet.filletBossBases(result, placedBosses, parameters.baseFilletRadius)
+    if bosses and parameters.hasBore():
+        boreTool = geometry.buildBoreTool(parameters)
+        # Bored after the fuse, so each bore may run on into the part below its boss.
+        result = result.cut([boreTool.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses])
+    return result.removeSplitter() if obj.Refine else result
+
+
+def _buildPreview(obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list) -> Part.Shape:
+    """Fast enough to rebuild on every input change: no fuse, no base fillet, and each bore is cut
+    into its own boss only."""
+    boredBosses = bosses
+    if parameters.hasBore():
+        boreTool = geometry.buildBoreTool(parameters)
+        boredBosses = [
+            boss.cut(boreTool.transformed(placedBoss.placement.toMatrix()))
+            for boss, placedBoss in zip(bosses, placedBosses)
+        ]
+    baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
+    return Part.makeCompound(baseShapes + boredBosses)
+
+
+def _placeBosses(obj, parameters: bossparameters.BossParameters) -> list:
+    """Bosses with the same gussets left out share one template."""
     ignoredPointIds = set(obj.IgnoredPointIds)
     rotationOffsets = obj.RotationOffsets or {}
-    return [
-        obj.Sketch.Placement.multiply(
-            App.Placement(
-                point.localPosition,
-                App.Rotation(geometry.LOCAL_AXIS, rotationOffsets.get(str(point.geometryId), 0.0)),
+    skippedGussets = getattr(obj, SKIPPED_GUSSETS_PROPERTY) or {}
+    templatesByGussetIndices = {}
+    placedBosses = []
+    points = [point for point in sketchpoints.readSketchPoints(obj.Sketch) if point.geometryId not in ignoredPointIds]
+    for point in points:
+        pointKey = str(point.geometryId)
+        gussetIndices = parameters.keptGussetIndices(skippedGussets.get(pointKey, ()))
+        if gussetIndices not in templatesByGussetIndices:
+            templatesByGussetIndices[gussetIndices] = geometry.buildBossTemplate(parameters, gussetIndices)
+        placement = obj.Sketch.Placement.multiply(
+            App.Placement(point.localPosition, App.Rotation(geometry.LOCAL_AXIS, rotationOffsets.get(pointKey, 0.0)))
+        )
+        placedBosses.append(
+            basefillet.PlacedBoss(
+                templatesByGussetIndices[gussetIndices],
+                placement,
+                len(gussetIndices),
+                gussetIndices == parameters.allGussetIndices(),
             )
         )
-        for point in sketchpoints.readSketchPoints(obj.Sketch)
-        if point.geometryId not in ignoredPointIds
-    ]
+    return placedBosses
 
 
 def _fuseIntoBase(obj, bosses: list) -> Part.Shape:

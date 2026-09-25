@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Click-to-toggle picking in the 3D view: while active, every click reports the picked
 # 3D position and the selection is cleared again so the next click registers.
 

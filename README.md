@@ -3,6 +3,15 @@
 Wizards that turn multi-step modelling chores into one parametric feature,
 configured in a task panel the way SolidWorks feature wizards are.
 
+> **Alpha.** Expect breaking changes; files made with one version may not
+> open cleanly in the next. Requires FreeCAD 1.1 or newer.
+
+Anyone opening a file that uses these features needs this addon installed.
+Without it the part still shows its last saved shape, but the feature can't
+rebuild: the first recompute that reaches it fails with an error naming
+this addon (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). To share a
+part with someone who doesn't have the addon, export it as STEP.
+
 Status: the **Boss Wizard** task panel is in place — point selection,
 ignoring instances, and every boss/bore/inset/gusset setting. Pressing OK
 creates one `Boss` feature in the Body: drafted boss, gussets, inset and
@@ -21,10 +30,13 @@ PartDesign only.
 3. The instance table lists every point. Untick a row, or press **Ignore
    instances...** and click points in the 3D view, to leave a point
    without a boss. Clicking an ignored point again brings its boss back.
-   Each row has a rotation offset that turns that boss's gussets/ribs;
-   **Apply to all** sets them in one go.
+   Select a row to fine-tune that boss below the Supports settings: a
+   rotation offset that turns its gussets/ribs, and one checkbox per
+   gusset to leave single gussets out (e.g. next to a wall you rib into
+   by hand). **Apply to all bosses** copies both to every boss.
 4. Set up the boss and press OK. The wizard remembers the values for next
-   time. Double-click the `Boss` feature in the tree to change it later.
+   time. Length, angle and count inputs also take expressions, e.g.
+   `VarSet.DraftAngle`: type `=` in the field or click its f(x) icon. Double-click the `Boss` feature in the tree to change it later.
 
 ## Layout
 
@@ -42,6 +54,8 @@ PartDesign only.
     `bosspanel.py` is the Boss Wizard panel.
   - `featureproperties.py` - mirrors a field schema onto a document object
     as FreeCAD properties.
+  - `addoncheck.py` - makes a saved feature fail its recompute loudly when
+    the file is opened without this addon.
   - `boss/` - everything specific to the boss feature: `parameters.py` (the
     inputs and their schema), `geometry.py` (the in-memory boss template),
     `feature.py` (the PartDesign feature that places and fuses it),
@@ -64,3 +78,7 @@ ln -s ~/Desktop/MoreFeaturesForFreeCad ~/.var/app/org.freecad.FreeCAD/data/FreeC
 Restart FreeCAD after editing `InitGui.py` or a command class. For other
 changes inside `morefeatures/`, run `dev/reload.py` from the FreeCAD
 Python console instead.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Every source file carries an SPDX header.

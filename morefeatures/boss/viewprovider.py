@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # How the Boss feature shows in the GUI: shaded like any PartDesign feature, with its sketch
 # nested under it the way a Pad nests its profile, and reopening the wizard on double-click.
 
@@ -38,9 +41,11 @@ class BossViewProvider:
         if vobj.Object.Sketch is None:
             return False
         # Imported here because the panel's import chain leads back to this module.
+        from morefeatures.boss import builder
         from morefeatures.taskpanels import bosspanel
 
-        Gui.Control.showDialog(bosspanel.BossTaskPanel.forExistingFeature(vobj.Object))
+        builder.beginEditingBosses(vobj.Object)
+        Gui.Control.showDialog(bosspanel.BossTaskPanel(vobj.Object, isNewFeature=False))
         return True
 
     def unsetEdit(self, vobj, mode):

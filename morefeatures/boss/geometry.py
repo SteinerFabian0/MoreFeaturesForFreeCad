@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The boss built once in its own frame: base centred on the origin, axis +Z. Every instance
 # in the part is a placed copy of this template.
 
@@ -16,10 +19,11 @@ MIN_GUSSET_PROFILE_HEIGHT_FACTOR = 3.0
 FLAT_FACE_TOLERANCE = 1e-6
 
 
-def buildBossTemplate(parameters: BossParameters) -> Part.Shape:
+def buildBossTemplate(parameters: BossParameters, gussetIndices: tuple) -> Part.Shape:
+    """gussetIndices are positions in the full gusset pattern; a missing index leaves a gap."""
     boss = _buildBossBody(parameters)
-    if parameters.hasGussets() and parameters.maxGussetHeight > 0.0:
-        boss = boss.fuse(_buildGussets(parameters))
+    if gussetIndices and parameters.maxGussetHeight > 0.0:
+        boss = boss.fuse(_buildGussets(parameters, gussetIndices))
     if parameters.hasBoreInset:
         boss = boss.cut(_buildInset(parameters))
     boss = boss.removeSplitter()
@@ -36,10 +40,9 @@ def _topRadius(parameters: BossParameters) -> float:
     return parameters.baseDiameter / 2.0 - parameters.height * math.tan(math.radians(parameters.draftAngle))
 
 
-def _buildGussets(parameters: BossParameters) -> list:
+def _buildGussets(parameters: BossParameters, gussetIndices: tuple) -> list:
     gusset = _buildGusset(parameters)
-    angleStep = 360.0 / parameters.gussetCount
-    return [gusset.rotated(ORIGIN, LOCAL_AXIS, index * angleStep) for index in range(parameters.gussetCount)]
+    return [gusset.rotated(ORIGIN, LOCAL_AXIS, index * parameters.gussetAngleStep) for index in gussetIndices]
 
 
 def _buildGusset(parameters: BossParameters) -> Part.Shape:

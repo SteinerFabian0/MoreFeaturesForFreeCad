@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The point markers of a driving sketch: every point is one instance location.
 # Instances are keyed by geometry id, not geometry index: the index of every later
 # element shifts when one is deleted, the id stays with its point for good.

@@ -1,10 +1,14 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The Boss Wizard command: validates the selection, then opens the boss task panel.
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from morefeatures import sketchpoints
+from morefeatures import config, sketchpoints
+from morefeatures.boss import builder
 from morefeatures.taskpanels import bosspanel
 
 COMMAND_NAME = "MoreFeatures_BossWizard"
@@ -33,7 +37,8 @@ class BossWizardCommand:
         if not sketchpoints.hasPoints(sketch):
             _showSelectionProblem("The selected sketch has no points.")
             return
-        Gui.Control.showDialog(bosspanel.BossTaskPanel(sketch, body))
+        bossFeature = builder.createBosses(sketch, body, config.getLastBossParameters())
+        Gui.Control.showDialog(bosspanel.BossTaskPanel(bossFeature, isNewFeature=True))
 
     def IsActive(self):
         return App.ActiveDocument is not None and Gui.Control.activeDialog() is False

@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The base fillet, rounded on the fused part: where each placed boss and its gussets meet the face
 # they stand on, and where the gussets' flat sides meet the boss, all in one fillet. Separate
 # fillets fail when their radii are equal, because each would roll into the other's rounded corner.
 
 import math
+from dataclasses import dataclass
 
 import FreeCAD as App
 import Part
@@ -12,29 +16,39 @@ from morefeatures.boss import geometry
 EDGE_MATCH_TOLERANCE = 1e-4
 
 
-def filletBossBases(
-    shape: Part.Shape, template: Part.Shape, placements: list, gussetCount: int, radius: float
-) -> Part.Shape:
-    footprint = geometry.findFootprintWire(template)
+@dataclass
+class PlacedBoss:
+    template: Part.Shape
+    placement: App.Placement
+    gussetCount: int
+    # A boss with a gusset left out gets anchored by hand, base fillet included.
+    hasBaseFillet: bool
+
+
+def filletBossBases(shape: Part.Shape, placedBosses: list, radius: float) -> Part.Shape:
     baseEdges = []
     gussetEdges = []
-    for placement in placements:
+    for placedBoss in placedBosses:
+        placement = placedBoss.placement
         axis = placement.Rotation.multVec(geometry.LOCAL_AXIS)
-        searchBox = template.BoundBox.transformed(placement.toMatrix())
+        searchBox = placedBoss.template.BoundBox.transformed(placement.toMatrix())
         searchBox.enlarge(EDGE_MATCH_TOLERANCE)
         candidates = [edge for edge in shape.Edges if searchBox.isInside(edge.BoundBox)]
-        placedFootprint = footprint.transformed(placement.toMatrix())
-        baseEdges += _findBaseEdges(shape, candidates, placedFootprint, placement.Base, axis)
+        if placedBoss.hasBaseFillet:
+            placedFootprint = geometry.findFootprintWire(placedBoss.template).transformed(placement.toMatrix())
+            baseEdges += _findBaseEdges(shape, candidates, placedFootprint, placement.Base, axis)
         instanceGussetEdges = _findGussetToBossEdges(shape, candidates, placement.Base, axis)
-        if len(instanceGussetEdges) != 2 * gussetCount:
+        if len(instanceGussetEdges) != 2 * placedBoss.gussetCount:
             raise ValueError(
                 "Found {0} gusset-to-boss edges instead of {1}; the gussets do not meet the boss cleanly.".format(
-                    len(instanceGussetEdges), 2 * gussetCount
+                    len(instanceGussetEdges), 2 * placedBoss.gussetCount
                 )
             )
         gussetEdges += instanceGussetEdges
-    if not baseEdges:
+    if not baseEdges and any(placedBoss.hasBaseFillet for placedBoss in placedBosses):
         raise ValueError("No boss stands on a face of the part; draw the sketch on the face the bosses grow from.")
+    if not baseEdges and not gussetEdges:
+        return shape
     return geometry.makeCheckedFillet(shape, radius, _withoutDuplicates(baseEdges + gussetEdges), "base")
 
 

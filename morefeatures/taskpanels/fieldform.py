@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # A task panel form generated from a ParameterField schema: one group box per field
 # group, one editor per field, values read and written as a plain dict.
 
@@ -6,12 +9,13 @@ from typing import Callable
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from morefeatures import schema
+from morefeatures import featureproperties, schema
 
 QUANTITY_UNITS = {
     schema.LENGTH: "mm",
     schema.ANGLE: "deg",
 }
+EXPRESSION_KINDS = (schema.LENGTH, schema.ANGLE, schema.COUNT)
 
 
 class FieldForm:
@@ -36,6 +40,13 @@ class FieldForm:
             editor.blockSignals(True)
             _writeEditor(editor, self._fieldsByName[name].kind, value)
             editor.blockSignals(False)
+
+    def bindExpressions(self, obj) -> None:
+        """obj must carry the schema's properties (featureproperties.addParameterProperties)."""
+        for name, editor in self._editors.items():
+            field = self._fieldsByName[name]
+            if field.kind in EXPRESSION_KINDS:
+                Gui.ExpressionBinding(editor).bind(obj, featureproperties.propertyName(field))
 
     def setFieldMaximum(self, name: str, maximum: float) -> None:
         editor = self._editors[name]
@@ -90,7 +101,7 @@ def _createEditor(field: schema.ParameterField) -> QtWidgets.QWidget:
         editor.setProperty("maximum", field.maximum)
         return editor
     if field.kind == schema.COUNT:
-        editor = QtWidgets.QSpinBox()
+        editor = Gui.UiLoader().createWidget("Gui::IntSpinBox")
         editor.setRange(int(field.minimum), int(field.maximum))
         return editor
     if field.kind == schema.FLAG:

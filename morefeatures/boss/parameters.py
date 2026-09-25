@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # The boss wizard's inputs: their values, and the field schema the task panel is built from.
 
 import math
@@ -75,6 +78,19 @@ class BossParameters:
 
     def hasGussets(self) -> bool:
         return self.supportMode == SUPPORT_GUSSETS
+
+    def hasSupports(self) -> bool:
+        return self.supportMode != SUPPORT_NONE
+
+    @property
+    def gussetAngleStep(self) -> float:
+        return 360.0 / self.gussetCount
+
+    def allGussetIndices(self) -> tuple:
+        return tuple(range(self.gussetCount)) if self.hasGussets() else ()
+
+    def keptGussetIndices(self, skippedGussetIndices) -> tuple:
+        return tuple(index for index in self.allGussetIndices() if index not in skippedGussetIndices)
 
     def toDict(self) -> dict:
         return asdict(self)

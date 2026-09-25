@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Fabian Steiner
+
 # Every command the addon provides. Adding a feature means adding its command module here.
 
 from morefeatures.commands import bosswizard
