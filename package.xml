@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
   <name>MoreFeaturesForFreeCad</name>
-  <description>Wizards that turn multi-step modelling chores into one parametric feature, starting with mouldable bosses placed on sketch points.</description>
+  <description>Wizards that turn multi-step modelling chores into one parametric feature, such as mouldable bosses placed on sketch points and drafted ribs drawn as cutter paths.</description>
   <version>0.1.0</version>
   <date>2026-09-24</date>
   <maintainer email="fabiansteiner.business@gmail.com">Fabian Steiner</maintainer>
@@ -22,6 +22,7 @@
       <icon>Resources/icons/MoreFeatures.svg</icon>
       <tag>injection moulding</tag>
       <tag>boss</tag>
+      <tag>rib</tag>
       <tag>productivity</tag>
     </workbench>
   </content>

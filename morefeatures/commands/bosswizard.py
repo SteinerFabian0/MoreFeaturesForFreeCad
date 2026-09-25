@@ -7,13 +7,11 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtWidgets
 
-from morefeatures import config, sketchpoints
+from morefeatures import config, selection, sketchpoints
 from morefeatures.boss import builder
 from morefeatures.taskpanels import bosspanel
 
 COMMAND_NAME = "MoreFeatures_BossWizard"
-SKETCH_TYPE_ID = "Sketcher::SketchObject"
-BODY_TYPE_ID = "PartDesign::Body"
 USAGE_HINT = "Select a sketch inside a PartDesign Body. Every point in the sketch marks one boss."
 
 
@@ -26,11 +24,11 @@ class BossWizardCommand:
         }
 
     def Activated(self):
-        sketch = _findSketch(Gui.Selection.getSelection())
+        sketch = selection.findSketch(Gui.Selection.getSelection())
         if sketch is None:
             _showSelectionProblem("No sketch selected.")
             return
-        body = _findBody(sketch)
+        body = selection.findBody(sketch)
         if body is None:
             _showSelectionProblem("The selected sketch is not inside a PartDesign Body.")
             return
@@ -46,15 +44,6 @@ class BossWizardCommand:
 
 def install() -> None:
     Gui.addCommand(COMMAND_NAME, BossWizardCommand())
-
-
-def _findSketch(selection: list):
-    return next((selected for selected in selection if selected.TypeId == SKETCH_TYPE_ID), None)
-
-
-def _findBody(sketch):
-    parent = sketch.getParentGeoFeatureGroup()
-    return parent if parent is not None and parent.TypeId == BODY_TYPE_ID else None
 
 
 def _showSelectionProblem(problem: str) -> None:

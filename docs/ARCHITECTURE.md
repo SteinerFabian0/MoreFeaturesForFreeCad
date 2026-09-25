@@ -123,3 +123,36 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 ## Not implemented yet
 
 - Rib settings (the `Ribs` support mode shows no fields yet).
+
+## Rib Wizard
+
+A rib is the inverse of the mould maker's cut: a cutter is run along every
+line of the path sketch, and the volume it sweeps becomes the rib. The path
+lines are the cutter's centre, so ribs come out wider than the sketch and
+with rounded ends. The cutter's taper is the rib's draft.
+
+### Decided
+
+- **PartDesign only, one feature in the tree**, absorbing its path sketch
+  and editing inside one transaction, exactly like the boss feature.
+- **The cutter is picked, not drawn:** a ball, flat or corner radius tip,
+  its size (ball radius; or tip diameter and corner radius), a taper angle
+  of 0–45° per side from the cutter axis, and the rib height from the
+  sketch plane to the rib top. The corner radius is at most half the tip
+  diameter.
+- **The corner radius cutter's tip diameter** is measured where its flanks,
+  carried on past the corner radius, meet the tip plane. With a taper, the
+  flat of its tip is therefore narrower than the tip diameter.
+- **The path lines mark the rib's centre line at its base**, in the sketch
+  plane, which is also the cutter's axis. The panel shows the resulting rib
+  width at the base.
+- **The tapered ball cutter's silhouette is the gusset profile**: an arc
+  tangent to two drafted flanks. The rib backend is to share that profile
+  with the boss gussets.
+
+### Still open
+
+- The rib backend: shape building, and the live preview. Until then the
+  feature passes the Body's shape on unchanged.
+- The vertical fillet where ribs meet or cross: its radius is already an
+  input and saved, but not built.

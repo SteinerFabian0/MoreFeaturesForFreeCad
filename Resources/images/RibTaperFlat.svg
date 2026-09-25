@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <rect x="1" y="1" width="118" height="118" rx="8" fill="#eef2f7"/>
+  <path d="M 1 94.00 H 119 V 111 A 8 8 0 0 1 111 119 H 9 A 8 8 0 0 1 1 111 Z" fill="#b9c5d3"/>
+  <g transform="translate(0 120) scale(1 -1)">
+    <path d="M 91.90 26.00 L 71.00 104.00 L 49.00 104.00 L 28.10 26.00 Z" fill="#b9c5d3"/>
+    <line x1="60.0" y1="26.00" x2="60.0" y2="114" stroke="#7a8796" stroke-width="1" stroke-dasharray="8 3 2 3"/>
+    <path d="M 1 26.00 L 28.10 26.00 L 49.00 104.00 L 71.00 104.00 L 91.90 26.00 L 119 26.00" fill="none" stroke="#2b3a4a" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M 71.00 104.00 L 49.00 104.00" fill="none" stroke="#d62828" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="60.0" cy="26.00" r="3.4" fill="#2f9e44" stroke="#ffffff" stroke-width="1.2"/>
+    <line x1="71.00" y1="104.00" x2="71.00" y2="26.00" stroke="#2b3a4a" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <path d="M 71.00 50.00 A 54.00 54.00 0 0 1 84.98 51.84" fill="none" stroke="#1c6fd1" stroke-width="1.5"/>
+    <path d="M 71.00 50.00 L 76.00 48.00 L 76.00 52.00 Z" fill="#1c6fd1"/>
+    <path d="M 84.98 51.84 L 79.63 52.48 L 80.66 48.61 Z" fill="#1c6fd1"/>
+  </g>
+  <text x="89.98" y="73.16" font-family="sans-serif" font-size="15" font-style="italic" fill="#1c6fd1">α</text>
+</svg>

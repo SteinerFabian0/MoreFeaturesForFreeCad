@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
-# A task panel form generated from a ParameterField schema: one group box per field
-# group, one editor per field, values read and written as a plain dict.
+# Task panel editors generated from a ParameterField schema, values read and written as a plain
+# dict; FieldForm also lays them out, one group box per field group.
 
 from typing import Callable
 
@@ -18,27 +18,30 @@ QUANTITY_UNITS = {
 EXPRESSION_KINDS = (schema.LENGTH, schema.ANGLE, schema.COUNT)
 
 
-class FieldForm:
+class FieldEditors:
+    """One labelled editor per field, not yet laid out; for panels that arrange their own form."""
+
     def __init__(self, parameterFields: tuple, onValuesChanged: Callable[[], None]):
-        self.widget = QtWidgets.QWidget()
         self._fieldsByName = {field.name: field for field in parameterFields}
         self._editors = {}
         self._labels = {}
         self._onValuesChanged = onValuesChanged
+        for field in parameterFields:
+            self._addEditor(field)
 
-        layout = QtWidgets.QVBoxLayout(self.widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        for groupName, groupFields in _groupedByGroupName(parameterFields):
-            layout.addWidget(self._buildGroupBox(groupName, groupFields))
+    def editor(self, name: str) -> QtWidgets.QWidget:
+        return self._editors[name]
+
+    def label(self, name: str) -> QtWidgets.QLabel:
+        return self._labels[name]
 
     def values(self) -> dict:
         return {name: _readEditor(editor, self._fieldsByName[name].kind) for name, editor in self._editors.items()}
 
     def setValues(self, values: dict) -> None:
-        for name, value in values.items():
-            editor = self._editors[name]
+        for name, editor in self._editors.items():
             editor.blockSignals(True)
-            _writeEditor(editor, self._fieldsByName[name].kind, value)
+            _writeEditor(editor, self._fieldsByName[name].kind, values[name])
             editor.blockSignals(False)
 
     def bindExpressions(self, obj) -> None:
@@ -61,20 +64,15 @@ class FieldForm:
         self._labels[name].setVisible(isVisible)
         self._editors[name].setVisible(isVisible)
 
-    def _buildGroupBox(self, groupName: str, groupFields: list) -> QtWidgets.QGroupBox:
-        groupBox = QtWidgets.QGroupBox(groupName)
-        formLayout = QtWidgets.QFormLayout(groupBox)
-        for field in groupFields:
-            editor = _createEditor(field)
-            label = QtWidgets.QLabel(field.label)
-            if field.tooltip:
-                label.setToolTip(field.tooltip)
-                editor.setToolTip(field.tooltip)
-            formLayout.addRow(label, editor)
-            self._connectChangeSignal(editor, field.kind)
-            self._editors[field.name] = editor
-            self._labels[field.name] = label
-        return groupBox
+    def _addEditor(self, field: schema.ParameterField) -> None:
+        editor = _createEditor(field)
+        label = QtWidgets.QLabel(field.label)
+        if field.tooltip:
+            label.setToolTip(field.tooltip)
+            editor.setToolTip(field.tooltip)
+        self._connectChangeSignal(editor, field.kind)
+        self._editors[field.name] = editor
+        self._labels[field.name] = label
 
     def _connectChangeSignal(self, editor: QtWidgets.QWidget, kind: str) -> None:
         notify = lambda *changed: self._onValuesChanged()
@@ -84,6 +82,39 @@ class FieldForm:
             editor.currentIndexChanged.connect(notify)
         else:
             editor.valueChanged.connect(notify)
+
+
+class FieldForm:
+    def __init__(self, parameterFields: tuple, onValuesChanged: Callable[[], None]):
+        self.widget = QtWidgets.QWidget()
+        self._editors = FieldEditors(parameterFields, onValuesChanged)
+
+        layout = QtWidgets.QVBoxLayout(self.widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        for groupName, groupFields in _groupedByGroupName(parameterFields):
+            layout.addWidget(self._buildGroupBox(groupName, groupFields))
+
+    def values(self) -> dict:
+        return self._editors.values()
+
+    def setValues(self, values: dict) -> None:
+        self._editors.setValues(values)
+
+    def bindExpressions(self, obj) -> None:
+        self._editors.bindExpressions(obj)
+
+    def setFieldMaximum(self, name: str, maximum: float) -> None:
+        self._editors.setFieldMaximum(name, maximum)
+
+    def setFieldVisible(self, name: str, isVisible: bool) -> None:
+        self._editors.setFieldVisible(name, isVisible)
+
+    def _buildGroupBox(self, groupName: str, groupFields: list) -> QtWidgets.QGroupBox:
+        groupBox = QtWidgets.QGroupBox(groupName)
+        formLayout = QtWidgets.QFormLayout(groupBox)
+        for field in groupFields:
+            formLayout.addRow(self._editors.label(field.name), self._editors.editor(field.name))
+        return groupBox
 
 
 def _groupedByGroupName(parameterFields: tuple) -> list:

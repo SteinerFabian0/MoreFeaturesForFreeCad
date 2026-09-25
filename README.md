@@ -38,6 +38,24 @@ PartDesign only.
    time. Length, angle and count inputs also take expressions, e.g.
    `VarSet.DraftAngle`: type `=` in the field or click its f(x) icon. Double-click the `Boss` feature in the tree to change it later.
 
+## Rib Wizard
+
+PartDesign only. **UI only so far:** the feature is created and keeps its
+settings, but adds no geometry yet.
+
+Draw the ribs the way the mould maker cuts their cavities: every line in
+the path sketch is the centre path of a cutter, and the rib is the volume
+that cutter sweeps. The lines need not be connected.
+
+1. In a PartDesign Body, draw a sketch of the rib centre lines on the face
+   the ribs grow from.
+2. Select the sketch and run **Rib Wizard**.
+3. Pick the cutter's tip (ball, flat, or flat with a corner radius), its
+   size, the taper angle (the rib's draft, 0 for none, up to 45°) and the
+   rib height. The panel shows the resulting rib width at the base, where
+   the path lines sit. The sketch nests under the `Rib` feature, like a
+   Pad's profile.
+
 ## Layout
 
 - `InitGui.py` - thin bootstrap: registers the workbench and installs every
@@ -47,11 +65,13 @@ PartDesign only.
   - `schema.py` - `ParameterField` and field kinds, shared by every wizard.
   - `config.py` - persisted settings (last-used wizard values).
   - `sketchpoints.py` - reading a sketch's points as instance locations.
+  - `selection.py` - finding the sketch and Body a command works on.
   - `commands/` - one module per command: resources, selection checks,
     opening the task panel.
   - `taskpanels/` - task panels. `fieldform.py` builds a form from a field
     schema, `pointpicker.py` does click-to-toggle picking in the 3D view,
-    `bosspanel.py` is the Boss Wizard panel.
+    `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
+    panel.
   - `featureproperties.py` - mirrors a field schema onto a document object
     as FreeCAD properties.
   - `addoncheck.py` - makes a saved feature fail its recompute loudly when
@@ -62,7 +82,9 @@ PartDesign only.
     `basefillet.py` (the boss base fillet on the fused part),
     `viewprovider.py` (its look in the GUI) and `builder.py` (the seam the
     panel calls).
+  - `rib/` - the rib feature, laid out like `boss/`.
 - `Resources/icons/` - workbench and command icons.
+- `Resources/images/` - pictures shown inside task panels.
 - `dev/reload.py` - reload `morefeatures/` modules without restarting.
 - `package.xml` - Addon Manager metadata.
 

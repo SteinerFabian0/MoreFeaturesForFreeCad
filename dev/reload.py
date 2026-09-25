@@ -9,27 +9,38 @@
 import importlib
 
 import morefeatures
-from morefeatures import config, featureproperties, registry, schema, sketchpoints
+from morefeatures import config, featureproperties, registry, schema, selection, sketchpoints
 from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
-from morefeatures.commands import bosswizard
-from morefeatures.taskpanels import bosspanel, fieldform, pointpicker
+from morefeatures.commands import bosswizard, ribwizard
+from morefeatures.rib import builder as ribbuilder
+from morefeatures.rib import feature as ribfeature
+from morefeatures.rib import parameters as ribparameters
+from morefeatures.rib import viewprovider as ribviewprovider
+from morefeatures.taskpanels import bosspanel, fieldform, pointpicker, ribpanel
 
 for module in (
     morefeatures,
     schema,
     featureproperties,
     parameters,
+    ribparameters,
     config,
+    selection,
     sketchpoints,
     geometry,
     basefillet,
     viewprovider,
     feature,
     builder,
+    ribviewprovider,
+    ribfeature,
+    ribbuilder,
     fieldform,
     pointpicker,
     bosspanel,
+    ribpanel,
     bosswizard,
+    ribwizard,
     registry,
 ):
     importlib.reload(module)
