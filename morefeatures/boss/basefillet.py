@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import FreeCAD as App
 import Part
 
+from morefeatures import fillet
 from morefeatures.boss import geometry
 
 EDGE_MATCH_TOLERANCE = 1e-4
@@ -49,7 +50,7 @@ def filletBossBases(shape: Part.Shape, placedBosses: list, radius: float) -> Par
         raise ValueError("No boss stands on a face of the part; draw the sketch on the face the bosses grow from.")
     if not baseEdges and not gussetEdges:
         return shape
-    return geometry.makeCheckedFillet(shape, radius, _withoutDuplicates(baseEdges + gussetEdges), "base")
+    return fillet.makeCheckedFillet(shape, radius, _withoutDuplicates(baseEdges + gussetEdges), "base")
 
 
 def _findBaseEdges(

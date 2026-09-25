@@ -147,12 +147,56 @@ with rounded ends. The cutter's taper is the rib's draft.
   plane, which is also the cutter's axis. The panel shows the resulting rib
   width at the base.
 - **The tapered ball cutter's silhouette is the gusset profile**: an arc
-  tangent to two drafted flanks. The rib backend is to share that profile
-  with the boss gussets.
+  tangent to two drafted flanks. Both are built by `cutterprofile.py`,
+  which also covers the flat and corner radius tips.
+- **Path edges are lines and arcs** (full circles included). Another curve
+  type is an error. An arc must be wider than the rib is at its base, or
+  its inner flank would fold over the arc's centre.
+- **The rib is the exact volume the cutter sweeps**, built in memory on
+  every recompute from pieces that meet on shared flat faces, then fused
+  into the Body's previous shape in one boolean:
+  1. every edge sweeps the cutter's whole silhouette (drawn in the plane
+     across the edge at its start, tip at the rib height, foot on the
+     sketch plane): extruded along a line, revolved about an arc's centre;
+  2. every point where edges end gets a wedge of the revolved cutter for
+     each gap wider than half a turn between the directions its edges
+     leave in. An edge running on through the point, like the bar of a T,
+     counts both ways. So a loose end gets a half cutter, a corner a wedge
+     on its outside only, and a tangent join or a T nothing.
+  The pieces are fused and refined into the ribs, which are the feature's
+  `AddSubShape`. Paths crossing mid-way are junctions too, with each
+  crossing path leaving both ways.
+- **The rib crossings fillet is a toolpath, not a fillet**: OpenCascade's
+  fillet fails where two ball tips cross, since the concave edge between
+  them fades out flat at the top. Instead, in every inside corner
+  (narrower than half a turn) the cutter also runs along an arc from path
+  to path, whose radius is the fillet radius plus half the rib's base
+  width, so the rib wall is rounded with the fillet radius at its base.
+  Above, the rounding grows as the rib narrows, and a ball tip can leave a
+  dip in the top, as it would in the mould.
+  - The arc is not quite tangent: it cuts into each path by 1% of the
+    fillet radius, a kink of about 8° at the rib wall. Exactly tangent, a
+    ball cutter's sweeps touch along a whole cross-section and the fuse
+    fails.
+  - In a sharp corner the arc can pass so far from the corner that steel
+    would stand between it and the paths down to the base; the cutter then
+    also runs along the bisector from the corner to the arc. A corner too
+    sharp for one such pass, or a path too short to reach the arc, is an
+    error naming the fillet radius.
+  - The ribs without fillets are fused first. The fillet sweeps are fused
+    into them and the result is checked: valid, a plausible volume, and
+    every fillet sweep inside it (a boolean can silently drop a piece).
+    A failed check retries with a slightly different overlap, and only
+    then reports an error.
+- **Live preview as in the boss wizard**: the same hidden `IsPreviewing`
+  flag (`preview.py`), the Body's previous shape and the fused ribs as a
+  compound, no fuse into the part.
+- **Visibility while editing** (both wizards, `featurevisibility.py`): the
+  feature alone is shown while the wizard is open. Cancel restores nothing
+  by hand, because aborting the transaction also undoes visibility
+  changes, including PartDesign hiding the previous tip when a feature is
+  created.
 
 ### Still open
 
-- The rib backend: shape building, and the live preview. Until then the
-  feature passes the Body's shape on unchanged.
-- The vertical fillet where ribs meet or cross: its radius is already an
-  input and saved, but not built.
+- Nothing for the ribs.

@@ -13,7 +13,7 @@ from morefeatures.taskpanels import ribpanel
 
 COMMAND_NAME = "MoreFeatures_RibWizard"
 USAGE_HINT = (
-    "Select a sketch inside a PartDesign Body. Its lines are the centre paths of the cutter "
+    "Select a sketch inside a PartDesign Body. Its lines and arcs are the centre paths of the cutter "
     "the ribs are machined with; they need not be connected."
 )
 

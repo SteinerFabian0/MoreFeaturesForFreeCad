@@ -9,6 +9,7 @@ import math
 import Part
 from FreeCAD import Vector
 
+from morefeatures import cutterprofile, fillet
 from morefeatures.boss.parameters import BossParameters
 
 ORIGIN = Vector(0.0, 0.0, 0.0)
@@ -62,25 +63,8 @@ def _buildGussetProfileWire(parameters: BossParameters, reach: float, profileDep
     z = -profileDepth; across the gusset is +Y."""
     draft = math.radians(parameters.gussetDraftAngle)
     ridgeRadius = parameters.gussetBaseThickness / (2.0 * math.cos(draft))
-    tangentHalfWidth = ridgeRadius * math.cos(draft)
-    tangentZ = -ridgeRadius * (1.0 - math.sin(draft))
-    footHalfWidth = tangentHalfWidth + (tangentZ + profileDepth) * math.tan(draft)
-    footZ = -profileDepth
-
-    def profilePoint(across: float, z: float) -> Vector:
-        return Vector(reach, across, z)
-
-    ridge = Part.Arc(
-        profilePoint(-tangentHalfWidth, tangentZ), profilePoint(0.0, 0.0), profilePoint(tangentHalfWidth, tangentZ)
-    )
-    return Part.Wire(
-        [
-            ridge.toShape(),
-            Part.makeLine(profilePoint(tangentHalfWidth, tangentZ), profilePoint(footHalfWidth, footZ)),
-            Part.makeLine(profilePoint(footHalfWidth, footZ), profilePoint(-footHalfWidth, footZ)),
-            Part.makeLine(profilePoint(-footHalfWidth, footZ), profilePoint(-tangentHalfWidth, tangentZ)),
-        ]
-    )
+    ridge = cutterprofile.CutterTip(ridgeRadius, 0.0, draft)
+    return cutterprofile.buildProfileWire(ridge, profileDepth, lambda across, z: Vector(reach, across, z))
 
 
 def _buildGussetHeightBand(parameters: BossParameters, reach: float) -> Part.Shape:
@@ -111,22 +95,11 @@ def buildBoreTool(parameters: BossParameters) -> Part.Shape:
     return _makeFrustum(bottomRadius, overshootRadius, depth + CUT_OVERSHOOT, bottomPosition)
 
 
-def makeCheckedFillet(shape: Part.Shape, radius: float, edges: list, filletName: str) -> Part.Shape:
-    failure = "The {0} fillet radius {1} mm does not fit.".format(filletName, radius)
-    try:
-        filleted = shape.makeFillet(radius, edges)
-    except Part.OCCError as error:
-        raise ValueError(failure) from error
-    if not filleted.isValid():
-        raise ValueError(failure)
-    return filleted
-
-
 def _filletTopEdge(boss: Part.Shape, parameters: BossParameters) -> Part.Shape:
     topFace = _findFlatFaceAt(boss, parameters.height)
     if topFace is None:
         raise ValueError("The boss has no flat top left to fillet; the inset is as wide as the top.")
-    return makeCheckedFillet(boss, parameters.topFilletRadius, topFace.OuterWire.Edges, "top")
+    return fillet.makeCheckedFillet(boss, parameters.topFilletRadius, topFace.OuterWire.Edges, "top")
 
 
 def findFootprintWire(template: Part.Shape) -> Part.Wire:

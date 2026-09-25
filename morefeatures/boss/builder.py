@@ -6,6 +6,7 @@
 
 from dataclasses import dataclass
 
+from morefeatures import preview
 from morefeatures.boss import feature
 from morefeatures.boss.parameters import BossParameters
 
@@ -38,14 +39,14 @@ def beginEditingBosses(bossFeature) -> None:
 
 def previewBosses(bossFeature, request: BossRequest) -> None:
     """Recomputes only the boss feature, as a quick preview; features after it catch up on commit."""
-    feature.setPreviewing(bossFeature, True)
+    preview.setPreviewing(bossFeature, True)
     _writeRequest(bossFeature, request)
     bossFeature.recompute()
 
 
 def commitBosses(bossFeature, request: BossRequest) -> None:
     document = bossFeature.Document
-    feature.setPreviewing(bossFeature, False)
+    preview.setPreviewing(bossFeature, False)
     _writeRequest(bossFeature, request)
     document.recompute()
     document.commitTransaction()
@@ -53,7 +54,7 @@ def commitBosses(bossFeature, request: BossRequest) -> None:
 
 def abortBosses(bossFeature) -> None:
     document = bossFeature.Document
-    feature.setPreviewing(bossFeature, False)
+    preview.setPreviewing(bossFeature, False)
     document.abortTransaction()
 
 

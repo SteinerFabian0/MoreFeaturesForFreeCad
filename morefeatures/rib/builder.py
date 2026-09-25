@@ -6,6 +6,7 @@
 
 from dataclasses import dataclass
 
+from morefeatures import preview
 from morefeatures.rib import feature
 from morefeatures.rib.parameters import RibParameters
 
@@ -33,14 +34,23 @@ def beginEditingRibs(ribFeature) -> None:
     ribFeature.Document.openTransaction(EDIT_TRANSACTION_NAME)
 
 
+def previewRibs(ribFeature, request: RibRequest) -> None:
+    """Recomputes only the rib feature, as a quick preview; features after it catch up on commit."""
+    preview.setPreviewing(ribFeature, True)
+    feature.writeParameters(ribFeature, request.parameters)
+    ribFeature.recompute()
+
+
 def commitRibs(ribFeature, request: RibRequest) -> None:
     document = ribFeature.Document
+    preview.setPreviewing(ribFeature, False)
     feature.writeParameters(ribFeature, request.parameters)
     document.recompute()
     document.commitTransaction()
 
 
 def abortRibs(ribFeature) -> None:
+    preview.setPreviewing(ribFeature, False)
     ribFeature.Document.abortTransaction()
 
 

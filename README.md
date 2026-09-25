@@ -16,7 +16,9 @@ Status: the **Boss Wizard** task panel is in place — point selection,
 ignoring instances, and every boss/bore/inset/gusset setting. Pressing OK
 creates one `Boss` feature in the Body: drafted boss, gussets, inset and
 top fillet, placed on every point, fused into the part, filleted into it
-and bored. Double-clicking the feature reopens the wizard to edit it. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
+and bored. Double-clicking the feature reopens the wizard to edit it. The
+**Rib Wizard** grows drafted ribs along the lines and arcs of a sketch,
+filleted where they meet or cross. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
 sequence and what is still to be decided.
 
 ## Boss Wizard
@@ -40,21 +42,29 @@ PartDesign only.
 
 ## Rib Wizard
 
-PartDesign only. **UI only so far:** the feature is created and keeps its
-settings, but adds no geometry yet.
+PartDesign only.
 
-Draw the ribs the way the mould maker cuts their cavities: every line in
-the path sketch is the centre path of a cutter, and the rib is the volume
-that cutter sweeps. The lines need not be connected.
+Draw the ribs the way the mould maker cuts their cavities: every line or
+arc in the path sketch is the centre path of a cutter, and the rib is the
+volume that cutter sweeps. The lines need not be connected; where they
+meet, cross or end, the rib is rounded the way the cutter would leave it.
 
 1. In a PartDesign Body, draw a sketch of the rib centre lines on the face
-   the ribs grow from.
+   the ribs grow from. Lines and arcs only; an arc must be wider than the
+   rib is at its base.
 2. Select the sketch and run **Rib Wizard**.
 3. Pick the cutter's tip (ball, flat, or flat with a corner radius), its
    size, the taper angle (the rib's draft, 0 for none, up to 45°) and the
    rib height. The panel shows the resulting rib width at the base, where
-   the path lines sit. The sketch nests under the `Rib` feature, like a
-   Pad's profile.
+   the path lines sit, and previews the ribs live. Press OK to fuse them
+   into the part. The sketch nests under the `Rib` feature, like a Pad's
+   profile; double-click the feature to change it later.
+4. A rib crossings fillet radius above 0 rounds every inside corner where
+   ribs meet or cross, as the mould maker would: the cutter also runs along
+   an arc from rib to rib, so the rib wall is rounded with that radius at
+   its base. With a ball tip this can leave a small dip in the rib top at
+   the corner. A radius too large for a short rib or a very sharp corner is
+   reported in the panel.
 
 ## Layout
 
@@ -65,13 +75,18 @@ that cutter sweeps. The lines need not be connected.
   - `schema.py` - `ParameterField` and field kinds, shared by every wizard.
   - `config.py` - persisted settings (last-used wizard values).
   - `sketchpoints.py` - reading a sketch's points as instance locations.
+  - `cutterprofile.py` - the silhouette of a ball, flat or corner radius
+    cutter; the ribs are swept with it and a boss gusset is its ball case.
+  - `preview.py` - the hidden flag a feature recomputes under while its
+    wizard previews it.
+  - `fillet.py` - filleting that fails with a readable message.
   - `selection.py` - finding the sketch and Body a command works on.
   - `commands/` - one module per command: resources, selection checks,
     opening the task panel.
   - `taskpanels/` - task panels. `fieldform.py` builds a form from a field
     schema, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
-    panel.
+    panel, `featurevisibility.py` what both show while editing.
   - `featureproperties.py` - mirrors a field schema onto a document object
     as FreeCAD properties.
   - `addoncheck.py` - makes a saved feature fail its recompute loudly when
@@ -82,7 +97,8 @@ that cutter sweeps. The lines need not be connected.
     `basefillet.py` (the boss base fillet on the fused part),
     `viewprovider.py` (its look in the GUI) and `builder.py` (the seam the
     panel calls).
-  - `rib/` - the rib feature, laid out like `boss/`.
+  - `rib/` - the rib feature, laid out like `boss/`; `geometry.py` sweeps
+    the cutter along the path.
 - `Resources/icons/` - workbench and command icons.
 - `Resources/images/` - pictures shown inside task panels.
 - `dev/reload.py` - reload `morefeatures/` modules without restarting.

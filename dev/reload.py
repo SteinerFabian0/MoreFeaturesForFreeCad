@@ -9,19 +9,33 @@
 import importlib
 
 import morefeatures
-from morefeatures import config, featureproperties, registry, schema, selection, sketchpoints
+from morefeatures import (
+    config,
+    cutterprofile,
+    featureproperties,
+    fillet,
+    preview,
+    registry,
+    schema,
+    selection,
+    sketchpoints,
+)
 from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
 from morefeatures.commands import bosswizard, ribwizard
 from morefeatures.rib import builder as ribbuilder
 from morefeatures.rib import feature as ribfeature
+from morefeatures.rib import geometry as ribgeometry
 from morefeatures.rib import parameters as ribparameters
 from morefeatures.rib import viewprovider as ribviewprovider
-from morefeatures.taskpanels import bosspanel, fieldform, pointpicker, ribpanel
+from morefeatures.taskpanels import bosspanel, featurevisibility, fieldform, pointpicker, ribpanel
 
 for module in (
     morefeatures,
     schema,
     featureproperties,
+    preview,
+    cutterprofile,
+    fillet,
     parameters,
     ribparameters,
     config,
@@ -32,11 +46,13 @@ for module in (
     viewprovider,
     feature,
     builder,
+    ribgeometry,
     ribviewprovider,
     ribfeature,
     ribbuilder,
     fieldform,
     pointpicker,
+    featurevisibility,
     bosspanel,
     ribpanel,
     bosswizard,

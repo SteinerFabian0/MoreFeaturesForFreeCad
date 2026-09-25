@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui, QtWidgets
 from morefeatures import IMAGES_DIRECTORY, config
 from morefeatures.rib import builder
 from morefeatures.rib import parameters as ribparameters
-from morefeatures.taskpanels import fieldform
+from morefeatures.taskpanels import featurevisibility, fieldform
 
 TILE_IMAGE_SIZE = 88
 RIB_SHAPE_TITLE = "Rib Shape (Tool Cross-section)"
@@ -38,6 +38,8 @@ TILE_STYLE_SHEET = (
 )
 # Picked with the tip tiles rather than a generated editor.
 TIP_SHAPE_FIELD_NAME = "tipShape"
+# Long enough that typing a number or holding a spin arrow rebuilds the preview once, not per step.
+PREVIEW_DELAY_MS = 200
 
 
 class RibTaskPanel:
@@ -54,6 +56,10 @@ class RibTaskPanel:
         self.taperIcons = {
             shape: QtGui.QIcon(os.path.join(IMAGES_DIRECTORY, fileName)) for shape, fileName in TAPER_IMAGE_FILES.items()
         }
+        self.previewTimer = QtCore.QTimer()
+        self.previewTimer.setSingleShot(True)
+        self.previewTimer.setInterval(PREVIEW_DELAY_MS)
+        self.previewTimer.timeout.connect(self._refreshPreview)
 
         editorFields = tuple(
             field for field in ribparameters.PARAMETER_FIELDS if field.name != TIP_SHAPE_FIELD_NAME
@@ -63,24 +69,31 @@ class RibTaskPanel:
         self._loadRequest(request)
         self.fieldEditors.bindExpressions(ribFeature)
         self._onParametersChanged()
+        featurevisibility.showFeatureAlone(ribFeature, self.body)
+        self._refreshPreview()
 
     def accept(self) -> bool:
-        parameters = self._currentParameters()
-        config.setLastRibParameters(parameters)
-        builder.commitRibs(self.ribFeature, builder.RibRequest(self.sketch, self.body, parameters))
-        self.sketch.ViewObject.Visibility = False
-        if self.ribFeature.BaseFeature is not None:
-            self.ribFeature.BaseFeature.ViewObject.Visibility = False
-        if self.body.Tip.Name != self.ribFeature.Name:
-            self.ribFeature.ViewObject.Visibility = False
-            self.body.Tip.ViewObject.Visibility = True
+        self.previewTimer.stop()
+        request = self._currentRequest()
+        config.setLastRibParameters(request.parameters)
+        builder.commitRibs(self.ribFeature, request)
+        featurevisibility.showCommittedFeature(self.ribFeature, self.body, self.sketch)
         self._finishEditing()
         return True
 
     def reject(self) -> bool:
+        self.previewTimer.stop()
         builder.abortRibs(self.ribFeature)
         self._finishEditing()
         return True
+
+    def _refreshPreview(self) -> None:
+        self.previewTimer.stop()
+        builder.previewRibs(self.ribFeature, self._currentRequest())
+        isValid = self.ribFeature.isValid()
+        self.previewProblemLabel.setVisible(not isValid)
+        if not isValid:
+            self.previewProblemLabel.setText("Preview failed: {0}".format(self.ribFeature.getStatusString()))
 
     def _finishEditing(self) -> None:
         if not self.isNewFeature:
@@ -89,6 +102,9 @@ class RibTaskPanel:
     def _loadRequest(self, request: builder.RibRequest) -> None:
         self.fieldEditors.setValues(request.parameters.toDict())
         self.tipButtons[self.tipShape].setChecked(True)
+
+    def _currentRequest(self) -> builder.RibRequest:
+        return builder.RibRequest(self.sketch, self.body, self._currentParameters())
 
     def _currentParameters(self) -> ribparameters.RibParameters:
         return ribparameters.fromDict(dict(self.fieldEditors.values(), tipShape=self.tipShape))
@@ -104,6 +120,7 @@ class RibTaskPanel:
         self.fieldEditors.setFieldMaximum("cornerRadius", parameters.maxCornerRadius)
         self.taperImage.setPixmap(self.taperIcons[parameters.tipShape].pixmap(_tileSize()))
         self.baseWidthLabel.setText("Rib width at base: {0:.2f} mm".format(parameters.baseWidth))
+        self.previewTimer.start()
 
     def _buildForm(self) -> QtWidgets.QWidget:
         widget = QtWidgets.QWidget()
@@ -114,6 +131,7 @@ class RibTaskPanel:
         layout.addWidget(self._buildTaperGroup())
         layout.addWidget(self._buildRibGroup())
         layout.addWidget(self._buildBaseWidthLabel())
+        layout.addWidget(self._buildPreviewProblemLabel())
         return widget
 
     def _buildTipGroup(self) -> QtWidgets.QGroupBox:
@@ -176,6 +194,13 @@ class RibTaskPanel:
             "Where the rib meets the sketch plane, following from the tip, the taper angle and the rib height."
         )
         return self.baseWidthLabel
+
+    def _buildPreviewProblemLabel(self) -> QtWidgets.QLabel:
+        self.previewProblemLabel = QtWidgets.QLabel()
+        self.previewProblemLabel.setWordWrap(True)
+        self.previewProblemLabel.setStyleSheet("color: red")
+        self.previewProblemLabel.setVisible(False)
+        return self.previewProblemLabel
 
 
 def _createTipTile(tipShape: str) -> QtWidgets.QToolButton:

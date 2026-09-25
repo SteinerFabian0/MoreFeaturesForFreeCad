@@ -7,7 +7,7 @@
 import FreeCAD as App
 import Part
 
-from morefeatures import addoncheck, featureproperties, sketchpoints
+from morefeatures import addoncheck, featureproperties, preview, sketchpoints
 from morefeatures.boss import basefillet, geometry, viewprovider
 from morefeatures.boss import parameters as bossparameters
 
@@ -15,9 +15,6 @@ FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
 FEATURE_NAME = "Boss"
 INSTANCES_GROUP = "Instances"
 SKIPPED_GUSSETS_PROPERTY = "SkippedGussets"
-PREVIEW_PROPERTY = "IsPreviewing"
-# An output property never marks the feature as needing a recompute when it changes.
-PROPERTY_OUTPUT = 8
 
 
 class BossFeature:
@@ -33,14 +30,14 @@ class BossFeature:
             "Rotation offset in degrees per point, keyed by the point's geometry id.",
         )
         _addSkippedGussetsProperty(obj)
-        _addPreviewProperty(obj)
+        preview.addPreviewProperty(obj)
         featureproperties.addParameterProperties(obj, bossparameters.PARAMETER_FIELDS)
         addoncheck.installAddonCheck(obj)
         obj.Proxy = self
 
     def onDocumentRestored(self, obj) -> None:
         _addSkippedGussetsProperty(obj)
-        _addPreviewProperty(obj)
+        preview.addPreviewProperty(obj)
         addoncheck.installAddonCheck(obj)
 
     def execute(self, obj) -> None:
@@ -48,7 +45,7 @@ class BossFeature:
         placedBosses = _placeBosses(obj, parameters)
         bosses = [placedBoss.template.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses]
         obj.AddSubShape = Part.makeCompound(bosses)
-        if getattr(obj, PREVIEW_PROPERTY):
+        if preview.isPreviewing(obj):
             obj.Shape = _buildPreview(obj, parameters, placedBosses, bosses)
         else:
             obj.Shape = _buildFinalShape(obj, parameters, placedBosses, bosses)
@@ -69,10 +66,6 @@ def createBossFeature(body, sketch):
         obj.ViewObject.DisplayMode = viewprovider.DEFAULT_DISPLAY_MODE
     obj.Sketch = sketch
     return obj
-
-
-def setPreviewing(obj, isPreviewing: bool) -> None:
-    setattr(obj, PREVIEW_PROPERTY, isPreviewing)
 
 
 def writeInstances(
@@ -117,16 +110,6 @@ def _addSkippedGussetsProperty(obj) -> None:
             INSTANCES_GROUP,
             "Indices of the gussets left out per point, keyed by the point's geometry id.",
         )
-
-
-def _addPreviewProperty(obj) -> None:
-    obj.addProperty(
-        "App::PropertyBool",
-        PREVIEW_PROPERTY,
-        addoncheck.BASE_GROUP,
-        "",
-        addoncheck.PROPERTY_HIDDEN | PROPERTY_OUTPUT | addoncheck.PROPERTY_NOT_SAVED,
-    )
 
 
 def _buildFinalShape(obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list) -> Part.Shape:

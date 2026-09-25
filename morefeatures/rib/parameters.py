@@ -7,6 +7,7 @@
 import math
 from dataclasses import asdict, dataclass, fields
 
+from morefeatures.cutterprofile import CutterTip
 from morefeatures.schema import ANGLE, CHOICE, LENGTH, ParameterField
 
 TIP_BALL = "Ball"
@@ -37,17 +38,18 @@ class RibParameters:
 
     @property
     def baseWidth(self) -> float:
-        return 2.0 * self._cutterRadiusBelowTip(self.ribHeight)
+        return 2.0 * self.cutterTip.radiusBelowTip(self.ribHeight)
 
-    def _cutterRadiusBelowTip(self, depth: float) -> float:
+    @property
+    def cutterTip(self) -> CutterTip:
         taper = math.radians(self.taperAngle)
         if self.tipShape == TIP_BALL:
-            return _roundedCutterRadius(depth, self.ballRadius, 0.0, taper)
+            return CutterTip(self.ballRadius, 0.0, taper)
         if self.tipShape == TIP_FLAT:
-            return self.tipDiameter / 2.0 + depth * math.tan(taper)
+            return CutterTip(0.0, self.tipDiameter / 2.0, taper)
         # The tip diameter is where the flanks, carried on past the corner radius, meet the tip plane.
         cornerCentreRadius = self.tipDiameter / 2.0 - self.cornerRadius * (1.0 - math.sin(taper)) / math.cos(taper)
-        return _roundedCutterRadius(depth, self.cornerRadius, cornerCentreRadius, taper)
+        return CutterTip(self.cornerRadius, cornerCentreRadius, taper)
 
     def toDict(self) -> dict:
         return asdict(self)
@@ -71,7 +73,7 @@ PARAMETER_FIELDS = (
     ),
     ParameterField(
         "crossingFilletRadius", "Rib crossings vertical fillet radius", RIB_GROUP, LENGTH,
-        tooltip="Rounds the vertical edges where ribs meet or cross; 0 leaves them sharp. Not built yet.",
+        tooltip="Rounds the vertical edges where ribs meet or cross; 0 leaves them sharp.",
     ),
 )
 
@@ -92,15 +94,6 @@ def isFieldRelevant(parameters: RibParameters, name: str) -> bool:
     if name in TIP_SIZE_FIELD_NAMES:
         return name in TIP_SIZE_FIELD_NAMES_BY_SHAPE[parameters.tipShape]
     return True
-
-
-def _roundedCutterRadius(depth: float, roundRadius: float, roundCentreRadius: float, taper: float) -> float:
-    """Radius of a cutter whose tip is rounded with roundRadius about a centre roundCentreRadius off
-    its axis, depth below the tip; above the tangent point it runs on as the tapered flank."""
-    tangentDepth = roundRadius * (1.0 - math.sin(taper))
-    if depth <= tangentDepth:
-        return roundCentreRadius + math.sqrt(roundRadius**2 - (roundRadius - depth) ** 2)
-    return roundCentreRadius + roundRadius * math.cos(taper) + (depth - tangentDepth) * math.tan(taper)
 
 
 def _assertFieldsMatchParameters() -> None:

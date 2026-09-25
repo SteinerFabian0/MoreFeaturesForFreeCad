@@ -1,19 +1,20 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
-# The Rib Wizard's document object: one PartDesign feature that owns its path sketch and the
-# cutter parameters. It adds no geometry yet and passes the Body's shape on unchanged.
+# The Rib Wizard's document object: one PartDesign feature that rebuilds the ribs from its path
+# sketch and cutter parameters on each recompute.
 
 import FreeCAD as App
 import Part
 
-from morefeatures import addoncheck, featureproperties
-from morefeatures.rib import viewprovider
+from morefeatures import addoncheck, featureproperties, preview
+from morefeatures.rib import geometry, viewprovider
 from morefeatures.rib import parameters as ribparameters
 
 FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
 FEATURE_NAME = "Rib"
 PATH_GROUP = "Path"
+SKETCH_NORMAL = App.Vector(0.0, 0.0, 1.0)
 
 
 class RibFeature:
@@ -21,16 +22,24 @@ class RibFeature:
         obj.addProperty(
             "App::PropertyLink", "Sketch", PATH_GROUP, "The lines in this sketch are the cutter's centre paths."
         )
+        preview.addPreviewProperty(obj)
         featureproperties.addParameterProperties(obj, ribparameters.PARAMETER_FIELDS)
         addoncheck.installAddonCheck(obj)
         obj.Proxy = self
 
     def onDocumentRestored(self, obj) -> None:
+        preview.addPreviewProperty(obj)
         addoncheck.installAddonCheck(obj)
 
     def execute(self, obj) -> None:
-        obj.AddSubShape = Part.Shape()
-        obj.Shape = obj.BaseFeature.Shape if obj.BaseFeature is not None else Part.Shape()
+        sketchNormal = obj.Sketch.Placement.Rotation.multVec(SKETCH_NORMAL)
+        ribs = geometry.buildRibs(obj.Sketch.Shape.Edges, sketchNormal, readParameters(obj))
+        obj.AddSubShape = ribs
+        if preview.isPreviewing(obj):
+            baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
+            obj.Shape = Part.makeCompound(baseShapes + [ribs])
+        else:
+            obj.Shape = _fuseIntoBase(obj, ribs)
 
     def dumps(self):
         return None
@@ -56,3 +65,12 @@ def writeParameters(obj, parameters: ribparameters.RibParameters) -> None:
 
 def readParameters(obj) -> ribparameters.RibParameters:
     return ribparameters.fromDict(featureproperties.readParameterProperties(obj, ribparameters.PARAMETER_FIELDS))
+
+
+def _fuseIntoBase(obj, ribs: Part.Shape) -> Part.Shape:
+    if obj.BaseFeature is None:
+        return ribs
+    fused = obj.BaseFeature.Shape.fuse(ribs)
+    if obj.Refine:
+        fused = fused.removeSplitter()
+    return fused.Solids[0] if len(fused.Solids) == 1 else fused

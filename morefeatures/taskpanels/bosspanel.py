@@ -10,7 +10,7 @@ from PySide import QtCore, QtWidgets
 from morefeatures import config, sketchpoints
 from morefeatures.boss import builder
 from morefeatures.boss import parameters as bossparameters
-from morefeatures.taskpanels import fieldform, pointpicker
+from morefeatures.taskpanels import featurevisibility, fieldform, pointpicker
 
 BOSS_COLUMN = 0
 POSITION_COLUMN = 1
@@ -43,7 +43,6 @@ class BossTaskPanel:
         self.rowsByPointId = {point.geometryId: row for row, point in enumerate(self.sketchPoints)}
         self.wasSketchVisible = self.sketch.ViewObject.Visibility
         self.pointPicker = pointpicker.PointPicker(self._togglePointNearest)
-        self.visibilityBeforeEditing = [(obj, obj.ViewObject.Visibility) for obj in self._objectsShownAroundEditing()]
         self.previewTimer = QtCore.QTimer()
         self.previewTimer.setSingleShot(True)
         self.previewTimer.setInterval(PREVIEW_DELAY_MS)
@@ -61,7 +60,7 @@ class BossTaskPanel:
         if self.sketchPoints:
             self.instanceTable.selectRow(0)
         self._onParametersChanged()
-        self._showBossFeatureAlone()
+        featurevisibility.showFeatureAlone(self.bossFeature, self.body)
         self._refreshPreview()
 
     def accept(self) -> bool:
@@ -70,12 +69,7 @@ class BossTaskPanel:
         request = self._currentRequest()
         config.setLastBossParameters(request.parameters)
         builder.commitBosses(self.bossFeature, request)
-        self.sketch.ViewObject.Visibility = False
-        if self.bossFeature.BaseFeature is not None:
-            self.bossFeature.BaseFeature.ViewObject.Visibility = False
-        if self.body.Tip.Name != self.bossFeature.Name:
-            self.bossFeature.ViewObject.Visibility = False
-            self.body.Tip.ViewObject.Visibility = True
+        featurevisibility.showCommittedFeature(self.bossFeature, self.body, self.sketch)
         self._finishEditing()
         return True
 
@@ -83,25 +77,8 @@ class BossTaskPanel:
         self.previewTimer.stop()
         self._stopPicking()
         builder.abortBosses(self.bossFeature)
-        for obj, wasVisible in self.visibilityBeforeEditing:
-            obj.ViewObject.Visibility = wasVisible
         self._finishEditing()
         return True
-
-    def _objectsShownAroundEditing(self) -> list:
-        """The boss feature is left out when new, because Cancel deletes it."""
-        candidates = [self.bossFeature, self.bossFeature.BaseFeature, self.body.Tip]
-        objectsByName = {
-            obj.Name: obj
-            for obj in candidates
-            if obj is not None and not (self.isNewFeature and obj.Name == self.bossFeature.Name)
-        }
-        return list(objectsByName.values())
-
-    def _showBossFeatureAlone(self) -> None:
-        for obj, _ in self.visibilityBeforeEditing:
-            obj.ViewObject.Visibility = False
-        self.bossFeature.ViewObject.Visibility = True
 
     def _schedulePreview(self) -> None:
         self.previewTimer.start()
