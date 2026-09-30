@@ -21,12 +21,15 @@ from morefeatures import (
     sketchpoints,
 )
 from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
-from morefeatures.commands import bosswizard, ribwizard
+from morefeatures.commands import bosswizard, ribwizard, sketchmirror
 from morefeatures.rib import builder as ribbuilder
 from morefeatures.rib import feature as ribfeature
 from morefeatures.rib import geometry as ribgeometry
 from morefeatures.rib import parameters as ribparameters
 from morefeatures.rib import viewprovider as ribviewprovider
+from morefeatures.sketchmirror import builder as sketchmirrorbuilder
+from morefeatures.sketchmirror import geometry as sketchmirrorgeometry
+from morefeatures.sketchmirror import linepicker, subelements
 from morefeatures.taskpanels import bosspanel, featurevisibility, fieldform, pointpicker, ribpanel, tiles
 
 for module in (
@@ -50,6 +53,10 @@ for module in (
     ribviewprovider,
     ribfeature,
     ribbuilder,
+    sketchmirrorgeometry,
+    subelements,
+    sketchmirrorbuilder,
+    linepicker,
     fieldform,
     tiles,
     pointpicker,
@@ -58,6 +65,7 @@ for module in (
     ribpanel,
     bosswizard,
     ribwizard,
+    sketchmirror,
     registry,
 ):
     importlib.reload(module)

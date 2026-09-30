@@ -248,3 +248,47 @@ with rounded ends. The cutter's taper is the rib's draft.
 ### Still open
 
 - Nothing for the ribs.
+
+## Sketch Mirror
+
+Not a wizard and not a feature: one command that edits the sketch being
+edited in the Sketcher, in one transaction. It keeps the preselection as
+the elements to mirror and waits for the mirror line to be clicked, since
+the Sketcher's own Symmetric constraint only relates geometry that has
+already been drawn.
+
+### Decided
+
+- **Copy plus constraints, no own geometry math at recompute.** Each
+  element is copied once, reflected, and tied to its original with
+  sketcher constraints; from then on the solver keeps it mirrored.
+  FreeCAD's `SketchObject.addSymmetric()` is not used: its Python binding
+  never adds the symmetry constraints, and it crashed FreeCAD 1.1.3.
+- **Constraints per element**, as FreeCAD's own C++ mirror sets them:
+  a point is `Symmetric` to its copy, a line both end points, a circle
+  its centre plus `Equal`, an arc both end points plus `Equal`. An arc's
+  copy runs the other way round, so its start mirrors the original's end.
+  Nothing else is copied: constraints between the originals already hold
+  the copies in place through the symmetry.
+- **A point on the mirror line is `Coincident` with its copy**, not
+  `Symmetric`: symmetry of two coincident points about the line is
+  degenerate and the solver reports a conflict. Coincident also closes a
+  mirrored half profile at the line. A point that only happens to lie on
+  the line when mirroring stays coincident with its copy afterwards.
+- **Arc copies are nudged by 1e-6 mm**: their centre is moved along the
+  chord bisector, with both end points kept exact. On an exact copy of a
+  half circle (a slot end) the centre lies on the chord, where `Equal`
+  has no slope, and the solver flags a constraint as redundant (the same
+  singularity FreeCAD nudges its own arc copies for, issue #13551). The
+  radius error this leaves is far below the solver's tolerance, so the
+  solver never pulls the centre back exactly, even through later edits.
+- **Mirror lines**: sketch lines (construction or not), external edges
+  that are lines, and the H and V axes. Mirroring about a point is not
+  supported.
+- **Mirrored**: points, lines, circles and arcs. Ellipses, conics and
+  B-splines carry internal alignment geometry and are skipped with a
+  warning; internal alignment geometry selected on its own is ignored.
+
+### Still open
+
+- Ellipses, conics and B-splines.

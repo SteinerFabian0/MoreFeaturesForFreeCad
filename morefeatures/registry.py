@@ -3,9 +3,9 @@
 
 # Every command the addon provides. Adding a feature means adding its command module here.
 
-from morefeatures.commands import bosswizard, ribwizard
+from morefeatures.commands import bosswizard, ribwizard, sketchmirror
 
-COMMAND_MODULES = (bosswizard, ribwizard)
+COMMAND_MODULES = (bosswizard, ribwizard, sketchmirror)
 
 
 def installCommands() -> None:

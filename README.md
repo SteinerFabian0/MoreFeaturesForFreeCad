@@ -18,7 +18,8 @@ creates one `Boss` feature in the Body: drafted boss, gussets, inset and
 top fillet, placed on every point, fused into the part, filleted into it
 and bored. Double-clicking the feature reopens the wizard to edit it. The
 **Rib Wizard** grows drafted ribs along the lines and arcs of a sketch,
-filleted where they meet or cross. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
+filleted where they meet or cross. **Sketch Mirror** mirrors sketch
+elements about a line, as copies held symmetric by constraints. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
 sequence and what is still to be decided.
 
 ## Boss Wizard
@@ -99,6 +100,24 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
    the corner. A radius too large for a short rib or a very sharp corner is
    reported in the panel.
 
+## Sketch Mirror
+
+Sketcher only: the command is available while a sketch is being edited.
+
+1. Select the lines, arcs, circles and points to mirror.
+2. Run **Sketch Mirror**. The selection stays highlighted as the list of
+   what will be mirrored.
+3. Click the mirror line: a line of the sketch (construction or not), an
+   external edge that is a line, or the horizontal or vertical axis.
+
+Each element gets a mirrored copy, construction if its original is, held
+symmetric to its original by constraints, so it follows every later edit
+of the original. A point that lies on the mirror line is made coincident
+with its copy instead, which joins a mirrored half profile into one closed
+outline. Esc (or a click into empty space) cancels before the line is
+picked; Undo removes the whole mirror in one step. Ellipses, conics and
+B-splines are not mirrored yet and are reported in the Report view.
+
 ## Layout
 
 - `InitGui.py` - thin bootstrap: registers the workbench and installs every
@@ -115,7 +134,7 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
   - `fillet.py` - filleting that fails with a readable message.
   - `selection.py` - finding the sketch and Body a command works on.
   - `commands/` - one module per command: resources, selection checks,
-    opening the task panel.
+    opening the task panel (or, for Sketch Mirror, waiting for the line).
   - `taskpanels/` - task panels. `fieldform.py` builds editors from a field
     schema, `tiles.py` the picture buttons modes are picked with, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
@@ -132,6 +151,10 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
     panel calls).
   - `rib/` - the rib feature, laid out like `boss/`; `geometry.py` sweeps
     the cutter along the path.
+  - `sketchmirror/` - Sketch Mirror: `geometry.py` (mirrored copies),
+    `subelements.py` (selection names as sketcher geometry ids),
+    `builder.py` (adds the copies and their constraints) and
+    `linepicker.py` (waits for the mirror line to be clicked).
 - `Resources/icons/` - workbench and command icons.
 - `Resources/images/` - pictures shown inside task panels.
 - `dev/reload.py` - reload `morefeatures/` modules without restarting.
