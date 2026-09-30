@@ -15,6 +15,8 @@ FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
 FEATURE_NAME = "Boss"
 INSTANCES_GROUP = "Instances"
 SKIPPED_GUSSETS_PROPERTY = "SkippedGussets"
+PROBE_TOLERANCE = 1e-4
+LEGACY_BASE_DIAMETER_PROPERTY = "BaseDiameter"
 
 
 class BossFeature:
@@ -37,6 +39,12 @@ class BossFeature:
 
     def onDocumentRestored(self, obj) -> None:
         _addSkippedGussetsProperty(obj)
+        legacyBaseDiameter = _takeLegacyBaseDiameter(obj)
+        featureproperties.addMissingParameterProperties(
+            obj, bossparameters.PARAMETER_FIELDS, bossparameters.BossParameters().toDict()
+        )
+        if legacyBaseDiameter is not None:
+            obj.WallThickness = readParameters(obj).wallThicknessForBaseDiameter(legacyBaseDiameter)
         preview.addPreviewProperty(obj)
         addoncheck.installAddonCheck(obj)
 
@@ -45,10 +53,11 @@ class BossFeature:
         placedBosses = _placeBosses(obj, parameters)
         bosses = [placedBoss.template.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses]
         obj.AddSubShape = Part.makeCompound(bosses)
+        cutters = _buildPlacedCutters(obj, parameters, placedBosses)
         if preview.isPreviewing(obj):
-            obj.Shape = _buildPreview(obj, parameters, placedBosses, bosses)
+            obj.Shape = _buildPreview(obj, parameters, bosses, cutters)
         else:
-            obj.Shape = _buildFinalShape(obj, parameters, placedBosses, bosses)
+            obj.Shape = _buildFinalShape(obj, parameters, placedBosses, bosses, cutters)
 
     def dumps(self):
         return None
@@ -112,29 +121,75 @@ def _addSkippedGussetsProperty(obj) -> None:
         )
 
 
-def _buildFinalShape(obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list) -> Part.Shape:
+def _takeLegacyBaseDiameter(obj):
+    """Files saved before the wall thickness sized the boss carry its base diameter instead."""
+    if LEGACY_BASE_DIAMETER_PROPERTY not in obj.PropertiesList:
+        return None
+    baseDiameter = getattr(obj, LEGACY_BASE_DIAMETER_PROPERTY).Value
+    obj.removeProperty(LEGACY_BASE_DIAMETER_PROPERTY)
+    return baseDiameter
+
+
+def _buildFinalShape(
+    obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list, cutters: list
+) -> Part.Shape:
     result = _fuseIntoBase(obj, bosses)
     if bosses and obj.BaseFeature is not None and parameters.baseFilletRadius > 0.0:
         result = basefillet.filletBossBases(result, placedBosses, parameters.baseFilletRadius)
-    if bosses and parameters.hasBore():
-        boreTool = geometry.buildBoreTool(parameters)
-        # Bored after the fuse, so each bore may run on into the part below its boss.
-        result = result.cut([boreTool.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses])
+    if cutters:
+        # Cut after the fuse, so each bore may run on into the part below its boss.
+        result = result.cut(cutters)
     return result.removeSplitter() if obj.Refine else result
 
 
-def _buildPreview(obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list) -> Part.Shape:
-    """Fast enough to rebuild on every input change: no fuse, no base fillet, and each bore is cut
-    into its own boss only."""
-    boredBosses = bosses
-    if parameters.hasBore():
-        boreTool = geometry.buildBoreTool(parameters)
-        boredBosses = [
-            boss.cut(boreTool.transformed(placedBoss.placement.toMatrix()))
-            for boss, placedBoss in zip(bosses, placedBosses)
-        ]
+def _buildPreview(obj, parameters: bossparameters.BossParameters, bosses: list, cutters: list) -> Part.Shape:
+    """Fast enough to rebuild on every input change: no fuse, no base fillet, and each boss is cut
+    by its own cutter only."""
+    cutBosses = [boss.cut(cutter) for boss, cutter in zip(bosses, cutters)] if cutters else bosses
     baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
-    return Part.makeCompound(baseShapes + boredBosses)
+    if baseShapes and cutters and parameters.isScrewHeadBoss():
+        # A screw head boss's bore and rubber pad cutout are mostly in the part, not the boss.
+        baseShapes = [baseShapes[0].cut(cutters)]
+    return Part.makeCompound(baseShapes + cutBosses)
+
+
+def _buildPlacedCutters(obj, parameters: bossparameters.BossParameters, placedBosses: list) -> list:
+    """One cutter per placed boss, or none at all."""
+    if parameters.isScrewHeadBoss():
+        baseShape = obj.BaseFeature.Shape if obj.BaseFeature is not None else None
+        return [
+            geometry.buildScrewHeadCutter(
+                parameters, _measurePartThicknessBelow(baseShape, placedBoss.placement)
+            ).transformed(placedBoss.placement.toMatrix())
+            for placedBoss in placedBosses
+        ]
+    if not parameters.hasThreadBore():
+        return []
+    boreTool = geometry.buildBoreTool(parameters)
+    return [boreTool.transformed(placedBoss.placement.toMatrix()) for placedBoss in placedBosses]
+
+
+def _measurePartThicknessBelow(baseShape, placement: App.Placement) -> float:
+    """How far the part reaches straight down from the boss's sketch point, along the boss axis."""
+    if baseShape is None:
+        return 0.0
+    origin = placement.Base
+    downward = placement.Rotation.multVec(geometry.LOCAL_AXIS).negative()
+    reach = baseShape.BoundBox.DiagonalLength + geometry.CUT_OVERSHOOT
+    probe = Part.makeLine(origin - downward * geometry.CUT_OVERSHOOT, origin + downward * reach)
+    spans = sorted(
+        sorted((vertex.Point - origin).dot(downward) for vertex in edge.Vertexes)
+        for edge in baseShape.common(probe).Edges
+    )
+    thickness = 0.0
+    for spanTop, spanBottom in spans:
+        if abs(spanTop - thickness) < PROBE_TOLERANCE:
+            thickness = spanBottom
+    if thickness == 0.0:
+        raise ValueError(
+            "A screw head boss's sketch point is not on the part; draw the sketch on the face the bosses grow from."
+        )
+    return thickness
 
 
 def _placeBosses(obj, parameters: bossparameters.BossParameters) -> list:

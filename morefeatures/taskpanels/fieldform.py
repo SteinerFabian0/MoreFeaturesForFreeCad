@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
 # Task panel editors generated from a ParameterField schema, values read and written as a plain
-# dict; FieldForm also lays them out, one group box per field group.
+# dict, laid out by each panel.
 
 from typing import Callable
 
@@ -19,7 +19,7 @@ EXPRESSION_KINDS = (schema.LENGTH, schema.ANGLE, schema.COUNT)
 
 
 class FieldEditors:
-    """One labelled editor per field, not yet laid out; for panels that arrange their own form."""
+    """One labelled editor per field, not yet laid out."""
 
     def __init__(self, parameterFields: tuple, onValuesChanged: Callable[[], None]):
         self._fieldsByName = {field.name: field for field in parameterFields}
@@ -60,6 +60,9 @@ class FieldEditors:
             _writeEditor(editor, kind, maximum)
             editor.blockSignals(False)
 
+    def setFieldLabel(self, name: str, text: str) -> None:
+        self._labels[name].setText(text)
+
     def setFieldVisible(self, name: str, isVisible: bool) -> None:
         self._labels[name].setVisible(isVisible)
         self._editors[name].setVisible(isVisible)
@@ -84,40 +87,14 @@ class FieldEditors:
             editor.valueChanged.connect(notify)
 
 
-class FieldForm:
-    def __init__(self, parameterFields: tuple, onValuesChanged: Callable[[], None]):
-        self.widget = QtWidgets.QWidget()
-        self._editors = FieldEditors(parameterFields, onValuesChanged)
-
-        layout = QtWidgets.QVBoxLayout(self.widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        for groupName, groupFields in _groupedByGroupName(parameterFields):
-            layout.addWidget(self._buildGroupBox(groupName, groupFields))
-
-    def values(self) -> dict:
-        return self._editors.values()
-
-    def setValues(self, values: dict) -> None:
-        self._editors.setValues(values)
-
-    def bindExpressions(self, obj) -> None:
-        self._editors.bindExpressions(obj)
-
-    def setFieldMaximum(self, name: str, maximum: float) -> None:
-        self._editors.setFieldMaximum(name, maximum)
-
-    def setFieldVisible(self, name: str, isVisible: bool) -> None:
-        self._editors.setFieldVisible(name, isVisible)
-
-    def _buildGroupBox(self, groupName: str, groupFields: list) -> QtWidgets.QGroupBox:
-        groupBox = QtWidgets.QGroupBox(groupName)
-        formLayout = QtWidgets.QFormLayout(groupBox)
-        for field in groupFields:
-            formLayout.addRow(self._editors.label(field.name), self._editors.editor(field.name))
-        return groupBox
+def buildFormLayout(fieldEditors: FieldEditors, fieldNames: tuple) -> QtWidgets.QFormLayout:
+    formLayout = QtWidgets.QFormLayout()
+    for name in fieldNames:
+        formLayout.addRow(fieldEditors.label(name), fieldEditors.editor(name))
+    return formLayout
 
 
-def _groupedByGroupName(parameterFields: tuple) -> list:
+def groupedByGroupName(parameterFields: tuple) -> list:
     groups = {}
     for field in parameterFields:
         groups.setdefault(field.group, []).append(field)

@@ -29,16 +29,49 @@ PartDesign only.
    Every **point** in it marks one boss.
 2. Select the sketch and run **Boss Wizard** (More Features toolbar/menu,
    or search it from the S-menu in any workbench).
-3. The instance table lists every point. Untick a row, or press **Ignore
-   instances...** and click points in the 3D view, to leave a point
-   without a boss. Clicking an ignored point again brings its boss back.
-   Select a row to fine-tune that boss below the Supports settings: a
+3. Pick the boss type: **Thread**, a boss a screw threads into, or
+   **Screw head**, a boss the screw passes through, with its head seated
+   in a bore that opens through the part's bottom face. Below come the
+   bore and boss settings for that type, then the supports (none or
+   gussets; ribs are not implemented yet). Only the settings for the
+   chosen type and supports are shown.
+4. The boss is sized by its wall thickness where it is thinnest: at the
+   top of a thread boss, at the screw seat of a screw head boss. The
+   outside draft thickens it below; the panel shows the resulting base
+   diameter and wall thickness at the base.
+5. At the bottom, the instance table lists every point. Untick a row, or
+   press **Ignore instances...** and click points in the 3D view, to
+   leave a point without a boss. Clicking an ignored point again brings
+   its boss back. Select a row to fine-tune that boss below the table: a
    rotation offset that turns its gussets/ribs, and one checkbox per
    gusset to leave single gussets out (e.g. next to a wall you rib into
    by hand). **Apply to all bosses** copies both to every boss.
-4. Set up the boss and press OK. The wizard remembers the values for next
-   time. Length, angle and count inputs also take expressions, e.g.
-   `VarSet.DraftAngle`: type `=` in the field or click its f(x) icon. Double-click the `Boss` feature in the tree to change it later.
+6. Press OK. The wizard remembers the values for next time. Length, angle
+   and count inputs also take expressions, e.g. `VarSet.DraftAngle`: type
+   `=` in the field or click its f(x) icon. Double-click the `Boss`
+   feature in the tree to change it later.
+
+### Screw head boss
+
+The sketch stays on the face the bosses stand on, as for a thread boss;
+the boss grows up from it.
+
+- **Screw bore**: the hole the screw passes through, from the boss top
+  (where its diameter is measured) through the top wall down to the screw
+  seat, with a 45° entry chamfer where it opens into the seat, clearing
+  the screw's under-head fillet.
+- **Screw seat bore**: from the seat on down through the part below, its
+  diameter measured at the seat, with a fillet around the seat's outer
+  edge.
+
+Each has its own draft angle, and both widen downwards, so the mould core
+pulls out through the bottom.
+
+**Enable rubber pad cutout** adds a round recess of the given diameter
+and depth in the part's bottom face below each boss, e.g. for a rubber
+foot. The part's thickness below each boss is measured straight down
+from its sketch point, so there is no thickness to enter and bosses on
+faces of different thickness each get it right.
 
 ## Rib Wizard
 
@@ -83,8 +116,8 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
   - `selection.py` - finding the sketch and Body a command works on.
   - `commands/` - one module per command: resources, selection checks,
     opening the task panel.
-  - `taskpanels/` - task panels. `fieldform.py` builds a form from a field
-    schema, `pointpicker.py` does click-to-toggle picking in the 3D view,
+  - `taskpanels/` - task panels. `fieldform.py` builds editors from a field
+    schema, `tiles.py` the picture buttons modes are picked with, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
     panel, `featurevisibility.py` what both show while editing.
   - `featureproperties.py` - mirrors a field schema onto a document object

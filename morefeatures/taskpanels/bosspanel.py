@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
-# The boss wizard task panel: which sketch points get a boss, how the boss is shaped,
-# and how each boss's gussets or ribs are rotated and which of its gussets are left out.
+# The boss wizard task panel: which sketch points get a boss, its type and supports picked from
+# tiles, how it is shaped, and how each boss's gussets or ribs are rotated and which of its gussets
+# are left out.
 
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
@@ -10,7 +11,7 @@ from PySide import QtCore, QtWidgets
 from morefeatures import config, sketchpoints
 from morefeatures.boss import builder
 from morefeatures.boss import parameters as bossparameters
-from morefeatures.taskpanels import featurevisibility, fieldform, pointpicker
+from morefeatures.taskpanels import featurevisibility, fieldform, pointpicker, tiles
 
 BOSS_COLUMN = 0
 POSITION_COLUMN = 1
@@ -22,6 +23,41 @@ MAX_ROTATION_OFFSET = 360.0
 MIN_VISIBLE_INSTANCE_ROWS = 4
 PICK_BUTTON_IDLE_TEXT = "Ignore instances..."
 PICK_BUTTON_ACTIVE_TEXT = "Done ignoring"
+BOSS_TYPE_TITLE = "Boss Type"
+SUPPORTS_TITLE = "Supports"
+BOSS_TYPE_IMAGE_FILES = {
+    bossparameters.BOSS_TYPE_THREAD: "BossTypeThread.svg",
+    bossparameters.BOSS_TYPE_SCREW_HEAD: "BossTypeScrewHead.svg",
+}
+BOSS_TYPE_TOOLTIPS = {
+    bossparameters.BOSS_TYPE_THREAD: "A screw threads into the boss's bore.",
+    bossparameters.BOSS_TYPE_SCREW_HEAD: "The screw passes through the boss; its head sits in a bore that "
+    "opens through the part's bottom face.",
+}
+SUPPORT_IMAGE_FILES_BY_BOSS_TYPE = {
+    bossparameters.BOSS_TYPE_THREAD: {
+        bossparameters.SUPPORT_NONE: "BossSupportNoneThread.svg",
+        bossparameters.SUPPORT_GUSSETS: "BossSupportGussetsThread.svg",
+        bossparameters.SUPPORT_RIBS: "BossSupportRibsThread.svg",
+    },
+    bossparameters.BOSS_TYPE_SCREW_HEAD: {
+        bossparameters.SUPPORT_NONE: "BossSupportNoneScrewHead.svg",
+        bossparameters.SUPPORT_GUSSETS: "BossSupportGussetsScrewHead.svg",
+        bossparameters.SUPPORT_RIBS: "BossSupportRibsScrewHead.svg",
+    },
+}
+SUPPORT_TOOLTIPS = {
+    bossparameters.SUPPORT_NONE: "A plain boss.",
+    bossparameters.SUPPORT_GUSSETS: "Gussets brace the boss against the face it stands on.",
+    bossparameters.SUPPORT_RIBS: "Ribs tie the boss to nearby walls.",
+}
+RIBS_NOT_IMPLEMENTED_TOOLTIP = "Ribs are not implemented yet."
+WALL_THICKNESS_LABELS = {
+    bossparameters.BOSS_TYPE_THREAD: "Wall thickness at top",
+    bossparameters.BOSS_TYPE_SCREW_HEAD: "Wall thickness at screw seat",
+}
+# Picked with tiles rather than generated editors.
+TILE_FIELD_NAMES = ("bossType", "supportMode")
 # Long enough that typing a number or holding a spin arrow rebuilds the preview once, not per step.
 PREVIEW_DELAY_MS = 200
 
@@ -48,14 +84,18 @@ class BossTaskPanel:
         self.previewTimer.setInterval(PREVIEW_DELAY_MS)
         self.previewTimer.timeout.connect(self._refreshPreview)
 
-        self.parameterForm = fieldform.FieldForm(bossparameters.PARAMETER_FIELDS, self._onParametersChanged)
+        self.bossType = request.parameters.bossType
+        self.supportMode = request.parameters.supportMode
+        self.editorFields = tuple(
+            field for field in bossparameters.PARAMETER_FIELDS if field.name not in TILE_FIELD_NAMES
+        )
+        self.fieldEditors = fieldform.FieldEditors(self.editorFields, self._onParametersChanged)
+        self.fieldGroups = []
+        settingsWidget = self._buildSettingsWidget()
         self._loadRequest(request)
-        self.parameterForm.bindExpressions(bossFeature)
-        self.gussetHeightLabel = QtWidgets.QLabel()
-        self.parameterForm.widget.layout().addWidget(self.gussetHeightLabel)
-        self.parameterForm.widget.layout().addWidget(self._buildSupportTuningGroup())
+        self.fieldEditors.bindExpressions(bossFeature)
 
-        self.form = [self._buildInstancesWidget(), self.parameterForm.widget]
+        self.form = [settingsWidget, self._buildInstancesWidget()]
         self._fillInstanceTable()
         if self.sketchPoints:
             self.instanceTable.selectRow(0)
@@ -102,7 +142,9 @@ class BossTaskPanel:
         )
 
     def _loadRequest(self, request: builder.BossRequest) -> None:
-        self.parameterForm.setValues(request.parameters.toDict())
+        self.fieldEditors.setValues(request.parameters.toDict())
+        self.bossTypeTiles.select(self.bossType)
+        self.supportTiles.select(self.supportMode)
         self.ignoredPointIds = set(request.ignoredPointIds) & set(self.rowsByPointId)
         for pointId, rotationOffset in request.rotationOffsetsByPointId.items():
             if pointId in self.rotationOffsetsByPointId:
@@ -143,18 +185,87 @@ class BossTaskPanel:
 
         self.instanceCountLabel = QtWidgets.QLabel()
         layout.addWidget(self.instanceCountLabel)
-        self.previewProblemLabel = QtWidgets.QLabel()
-        self.previewProblemLabel.setWordWrap(True)
-        self.previewProblemLabel.setStyleSheet("color: red")
-        self.previewProblemLabel.setVisible(False)
-        layout.addWidget(self.previewProblemLabel)
 
         self.pickButton = QtWidgets.QPushButton(PICK_BUTTON_IDLE_TEXT)
         self.pickButton.setCheckable(True)
         self.pickButton.setToolTip("Click points in the 3D view to toggle whether they get a boss.")
         self.pickButton.toggled.connect(self._onPickButtonToggled)
         layout.addWidget(self.pickButton)
+        layout.addWidget(self._buildSupportTuningGroup())
         return widget
+
+    def _buildSettingsWidget(self) -> QtWidgets.QWidget:
+        widget = QtWidgets.QWidget()
+        widget.setWindowTitle("Boss Wizard")
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._buildPreviewProblemLabel())
+        layout.addWidget(self._buildBossTypeGroup())
+        shapeFields = tuple(field for field in self.editorFields if field.group != bossparameters.GUSSET_GROUP)
+        for groupName, groupFields in fieldform.groupedByGroupName(shapeFields):
+            group = self._buildFieldGroup(groupName, tuple(field.name for field in groupFields))
+            if groupName == bossparameters.BOSS_GROUP:
+                group.layout().addRow(self._buildBossSizeLabels())
+            layout.addWidget(group)
+        layout.addWidget(self._buildSupportsGroup())
+        return widget
+
+    def _buildPreviewProblemLabel(self) -> QtWidgets.QLabel:
+        self.previewProblemLabel = QtWidgets.QLabel()
+        self.previewProblemLabel.setWordWrap(True)
+        self.previewProblemLabel.setStyleSheet("color: red")
+        self.previewProblemLabel.setVisible(False)
+        return self.previewProblemLabel
+
+    def _buildBossTypeGroup(self) -> QtWidgets.QGroupBox:
+        group = QtWidgets.QGroupBox(BOSS_TYPE_TITLE)
+        layout = QtWidgets.QVBoxLayout(group)
+        self.bossTypeTiles = tiles.TileRow(
+            bossparameters.BOSS_TYPES, BOSS_TYPE_IMAGE_FILES, BOSS_TYPE_TOOLTIPS, self._onBossTypeChosen
+        )
+        layout.addWidget(self.bossTypeTiles.widget)
+        return group
+
+    def _buildSupportsGroup(self) -> QtWidgets.QGroupBox:
+        group = QtWidgets.QGroupBox(SUPPORTS_TITLE)
+        layout = QtWidgets.QVBoxLayout(group)
+        self.supportTiles = tiles.TileRow(
+            bossparameters.SUPPORT_MODES,
+            SUPPORT_IMAGE_FILES_BY_BOSS_TYPE[self.bossType],
+            SUPPORT_TOOLTIPS,
+            self._onSupportModeChosen,
+        )
+        self.supportTiles.disableChoice(bossparameters.SUPPORT_RIBS, RIBS_NOT_IMPLEMENTED_TOOLTIP)
+        layout.addWidget(self.supportTiles.widget)
+        layout.addLayout(fieldform.buildFormLayout(self.fieldEditors, bossparameters.GUSSET_FIELD_NAMES))
+        self.gussetHeightLabel = QtWidgets.QLabel()
+        layout.addWidget(self.gussetHeightLabel)
+        return group
+
+    def _buildBossSizeLabels(self) -> QtWidgets.QWidget:
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.baseDiameterLabel = QtWidgets.QLabel()
+        self.baseDiameterLabel.setToolTip(
+            "The boss's outside diameter where it meets the face it stands on: its footprint, following from the "
+            "wall thickness, the bore and the outer draft."
+        )
+        layout.addWidget(self.baseDiameterLabel)
+        self.baseWallThicknessLabel = QtWidgets.QLabel()
+        self.baseWallThicknessLabel.setToolTip(
+            "The boss's outer radius minus the bore's radius, both at the base, where the boss joins the part and "
+            "its wall is thickest. For moulded parts, keep it at about 60 % of the part's nominal wall or less, "
+            "or the part may sink opposite the boss."
+        )
+        layout.addWidget(self.baseWallThicknessLabel)
+        return widget
+
+    def _buildFieldGroup(self, groupName: str, fieldNames: tuple) -> QtWidgets.QGroupBox:
+        group = QtWidgets.QGroupBox(groupName)
+        group.setLayout(fieldform.buildFormLayout(self.fieldEditors, fieldNames))
+        self.fieldGroups.append((group, fieldNames))
+        return group
 
     def _buildSupportTuningGroup(self) -> QtWidgets.QGroupBox:
         self.supportTuningGroup = QtWidgets.QGroupBox()
@@ -295,18 +406,36 @@ class BossTaskPanel:
         self.pickButton.blockSignals(False)
         self.pickButton.setText(PICK_BUTTON_IDLE_TEXT)
 
+    def _onBossTypeChosen(self, bossType: str) -> None:
+        self.bossType = bossType
+        self.supportTiles.setImages(SUPPORT_IMAGE_FILES_BY_BOSS_TYPE[bossType])
+        self._onParametersChanged()
+
+    def _onSupportModeChosen(self, supportMode: str) -> None:
+        self.supportMode = supportMode
+        self._onParametersChanged()
+
     def _onParametersChanged(self) -> None:
         parameters = self._currentParameters()
-        for field in bossparameters.PARAMETER_FIELDS:
-            self.parameterForm.setFieldVisible(field.name, bossparameters.isFieldRelevant(parameters, field.name))
-        self.parameterForm.setFieldMaximum("boreDepth", parameters.maxBoreDepth)
+        for field in self.editorFields:
+            self.fieldEditors.setFieldVisible(field.name, bossparameters.isFieldRelevant(parameters, field.name))
+        for group, fieldNames in self.fieldGroups:
+            group.setVisible(any(bossparameters.isFieldRelevant(parameters, name) for name in fieldNames))
+        self.fieldEditors.setFieldMaximum("boreDepth", parameters.maxBoreDepth)
+        self.fieldEditors.setFieldMaximum("topWallThickness", parameters.height)
+        self.fieldEditors.setFieldLabel("wallThickness", WALL_THICKNESS_LABELS[parameters.bossType])
+        self.baseDiameterLabel.setText("Base diameter: {0:.2f} mm".format(parameters.baseDiameter))
+        self.baseWallThicknessLabel.setVisible(parameters.hasBore())
+        self.baseWallThicknessLabel.setText(_describeBaseWallThickness(parameters))
         self.gussetHeightLabel.setVisible(parameters.hasGussets())
         self.gussetHeightLabel.setText(_describeGussetHeight(parameters))
         self._refreshSupportTuning()
         self._schedulePreview()
 
     def _currentParameters(self) -> bossparameters.BossParameters:
-        return bossparameters.fromDict(self.parameterForm.values())
+        return bossparameters.fromDict(
+            dict(self.fieldEditors.values(), bossType=self.bossType, supportMode=self.supportMode)
+        )
 
 
 def _createRotationEditor() -> QtWidgets.QDoubleSpinBox:
@@ -343,6 +472,12 @@ def _describeLocalPosition(point: sketchpoints.SketchPoint) -> str:
 def _describeGusset(parameters: bossparameters.BossParameters, gussetIndex: int, rotationOffset: float) -> str:
     angle = (rotationOffset + gussetIndex * parameters.gussetAngleStep) % 360.0
     return "Gusset {0} at {1:.1f}°".format(gussetIndex + 1, angle)
+
+
+def _describeBaseWallThickness(parameters: bossparameters.BossParameters) -> str:
+    place = "base" if parameters.wallMeasurementHeight == 0.0 else "bore bottom"
+    breakThroughNote = "  (the bore breaks through)" if parameters.wallThicknessAtBase <= 0.0 else ""
+    return "Wall thickness at {0}: {1:.2f} mm{2}".format(place, parameters.wallThicknessAtBase, breakThroughNote)
 
 
 def _describeGussetHeight(parameters: bossparameters.BossParameters) -> str:

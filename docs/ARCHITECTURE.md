@@ -104,6 +104,54 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   keeps its settings, and a deleted point's settings are dropped. Only a
   point that is deleted and redrawn counts as new.
 
+- **Boss type**: a thread boss (a screw threads into its blind bore) or a
+  screw head boss (the screw passes through; its head sits in a bore from
+  below). Both stand on the sketch plane with the same reference point,
+  the sketch point on the face they grow from, so the template, gussets
+  and base fillet are shared; only the cutter differs.
+- **The boss is sized by its wall thickness where the wall is thinnest**,
+  not by its base diameter: around the bore entry at the top of a thread
+  boss, around the screw seat of a screw head boss (with no thread bore,
+  it is the top radius). That is where the boss is weakest and most loaded
+  (thread-forming hoop stress at the entry, the clamp load at the seat),
+  and screw makers' boss guidelines size it there too. The outer draft
+  only thickens the wall further down, so height and draft changes never
+  thin the critical wall. The base diameter (the footprint, which the
+  gussets reach out from) and the wall thickness at the base (where sink
+  marks come from) follow, and the panel shows both. Files saved while the
+  base diameter drove the boss have it converted to the wall thickness
+  that gives the same boss.
+- **Screw head cutter**, cut once after the fuse like the bore: the screw
+  bore from the boss top (diameter measured there) down to the screw seat,
+  `topWallThickness` below the top, and the screw seat bore
+  (`screwSeatDiameter`, measured at the seat) from there on through the
+  part. Each has its own draft, both widening downwards so one core pulls
+  out through the bottom. The screw bore runs on below the seat inside the
+  wider screw seat bore, so the two pieces never share a face; how far is
+  capped at half the flat seat's width, which keeps it inside even with
+  steep drafts.
+  - The **entry chamfer** (45°, where the screw bore opens into the seat)
+    is a cone that meets the screw bore wall exactly `entryChamferSize`
+    above the seat; with draft, its width on the seat is a hair wider.
+  - The **screw seat fillet** rounds the screw seat bore tool's top rim, so
+    the part gets a rounded inside corner where the seat meets the bore
+    wall.
+  - The chamfer and the fillet must leave a flat ring between them for the
+    screw head to press against, and the chamfer must be shallower than
+    the top wall.
+- **Part thickness below a screw head boss is measured**, not entered and
+  not picked as a face (a picked face would depend on topological names):
+  a line from the sketch point along the boss axis downwards is intersected
+  with the Body's previous shape, and the material span starting at the
+  sketch point (chained if split) ends at the part's bottom face. The
+  screw seat bore ends there and the rubber pad cutout, a plain cylinder,
+  is sunk into it. A sketch point with no material directly below is an
+  error. With no previous shape the thickness is 0.
+- **Rubber pad cutout** must be shallower than the part is thick below the
+  boss, or it would break through.
+- **Screw head preview** also cuts the Body's previous shape with the
+  cutters, since the screw seat bore and the rubber pad cutout lie mostly
+  in the part, where a boss-only preview would not show them.
 - **Opened without the addon**, a feature's code does not load, so FreeCAD
   would silently keep its last saved shape through every later change.
   Each feature therefore carries a read-only `RequiredAddon` property bound
@@ -122,7 +170,7 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 
 ## Not implemented yet
 
-- Rib settings (the `Ribs` support mode shows no fields yet).
+- Ribs as boss supports (the `Ribs` tile is disabled).
 
 ## Rib Wizard
 

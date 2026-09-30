@@ -4,17 +4,14 @@
 # The rib wizard task panel: the cutter the ribs are "machined" with, picked from tip shape
 # tiles, with the taper angle shown on a drawing of the chosen cutter.
 
-import os
-
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui, QtWidgets
+from PySide import QtCore, QtWidgets
 
-from morefeatures import IMAGES_DIRECTORY, config
+from morefeatures import config
 from morefeatures.rib import builder
 from morefeatures.rib import parameters as ribparameters
-from morefeatures.taskpanels import featurevisibility, fieldform
+from morefeatures.taskpanels import featurevisibility, fieldform, tiles
 
-TILE_IMAGE_SIZE = 88
 RIB_SHAPE_TITLE = "Rib Shape (Tool Cross-section)"
 TIP_IMAGE_FILES = {
     ribparameters.TIP_BALL: "RibTipBall.svg",
@@ -31,11 +28,6 @@ TIP_TOOLTIPS = {
     ribparameters.TIP_FLAT: "Flat end mill: a flat rib top with sharp edges.",
     ribparameters.TIP_CORNER_RADIUS: "Corner radius end mill: a flat rib top with rounded edges.",
 }
-TILE_STYLE_SHEET = (
-    "QToolButton { border: 3px solid transparent; border-radius: 6px; padding: 2px; }"
-    "QToolButton:hover { border-color: palette(mid); }"
-    "QToolButton:checked { border-color: palette(highlight); }"
-)
 # Picked with the tip tiles rather than a generated editor.
 TIP_SHAPE_FIELD_NAME = "tipShape"
 # Long enough that typing a number or holding a spin arrow rebuilds the preview once, not per step.
@@ -53,9 +45,7 @@ class RibTaskPanel:
         self.sketch = request.sketch
         self.body = request.body
         self.tipShape = request.parameters.tipShape
-        self.taperIcons = {
-            shape: QtGui.QIcon(os.path.join(IMAGES_DIRECTORY, fileName)) for shape, fileName in TAPER_IMAGE_FILES.items()
-        }
+        self.taperIcons = {shape: tiles.loadImage(fileName) for shape, fileName in TAPER_IMAGE_FILES.items()}
         self.previewTimer = QtCore.QTimer()
         self.previewTimer.setSingleShot(True)
         self.previewTimer.setInterval(PREVIEW_DELAY_MS)
@@ -101,7 +91,7 @@ class RibTaskPanel:
 
     def _loadRequest(self, request: builder.RibRequest) -> None:
         self.fieldEditors.setValues(request.parameters.toDict())
-        self.tipButtons[self.tipShape].setChecked(True)
+        self.tipTiles.select(self.tipShape)
 
     def _currentRequest(self) -> builder.RibRequest:
         return builder.RibRequest(self.sketch, self.body, self._currentParameters())
@@ -118,7 +108,7 @@ class RibTaskPanel:
         for name in ribparameters.TIP_SIZE_FIELD_NAMES:
             self.fieldEditors.setFieldVisible(name, ribparameters.isFieldRelevant(parameters, name))
         self.fieldEditors.setFieldMaximum("cornerRadius", parameters.maxCornerRadius)
-        self.taperImage.setPixmap(self.taperIcons[parameters.tipShape].pixmap(_tileSize()))
+        self.taperImage.setPixmap(self.taperIcons[parameters.tipShape].pixmap(tiles.tileSize()))
         self.baseWidthLabel.setText("Rib width at base: {0:.2f} mm".format(parameters.baseWidth))
         self.previewTimer.start()
 
@@ -137,36 +127,19 @@ class RibTaskPanel:
     def _buildTipGroup(self) -> QtWidgets.QGroupBox:
         group = QtWidgets.QGroupBox(RIB_SHAPE_TITLE)
         layout = QtWidgets.QVBoxLayout(group)
-        layout.addLayout(self._buildTipTiles())
+        self.tipTiles = tiles.TileRow(ribparameters.TIP_SHAPES, TIP_IMAGE_FILES, TIP_TOOLTIPS, self._onTipShapeChosen)
+        layout.addWidget(self.tipTiles.widget)
         sizeLayout = QtWidgets.QFormLayout()
         for name in ribparameters.TIP_SIZE_FIELD_NAMES:
             sizeLayout.addRow(self.fieldEditors.label(name), self.fieldEditors.editor(name))
         layout.addLayout(sizeLayout)
         return group
 
-    def _buildTipTiles(self) -> QtWidgets.QHBoxLayout:
-        row = QtWidgets.QHBoxLayout()
-        self.tipButtonGroup = QtWidgets.QButtonGroup()
-        self.tipButtonGroup.setExclusive(True)
-        self.tipButtons = {}
-        row.addStretch()
-        for tipShape in ribparameters.TIP_SHAPES:
-            button = _createTipTile(tipShape)
-            button.clicked.connect(lambda isChecked=False, shape=tipShape: self._onTipShapeChosen(shape))
-            self.tipButtonGroup.addButton(button)
-            self.tipButtons[tipShape] = button
-            row.addWidget(button)
-        row.addStretch()
-        tileWidth = max(button.sizeHint().width() for button in self.tipButtons.values())
-        for button in self.tipButtons.values():
-            button.setFixedWidth(tileWidth)
-        return row
-
     def _buildTaperGroup(self) -> QtWidgets.QGroupBox:
         group = QtWidgets.QGroupBox(ribparameters.TAPER_GROUP)
         layout = QtWidgets.QHBoxLayout(group)
         self.taperImage = QtWidgets.QLabel()
-        self.taperImage.setFixedSize(_tileSize())
+        self.taperImage.setFixedSize(tiles.tileSize())
         self.taperImage.setToolTip("The taper angle is measured per side, from the cutter's axis.")
         layout.addWidget(self.taperImage)
 
@@ -202,18 +175,3 @@ class RibTaskPanel:
         self.previewProblemLabel.setVisible(False)
         return self.previewProblemLabel
 
-
-def _createTipTile(tipShape: str) -> QtWidgets.QToolButton:
-    button = QtWidgets.QToolButton()
-    button.setCheckable(True)
-    button.setIcon(QtGui.QIcon(os.path.join(IMAGES_DIRECTORY, TIP_IMAGE_FILES[tipShape])))
-    button.setIconSize(_tileSize())
-    button.setText(tipShape)
-    button.setToolTip(TIP_TOOLTIPS[tipShape])
-    button.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
-    button.setStyleSheet(TILE_STYLE_SHEET)
-    return button
-
-
-def _tileSize() -> QtCore.QSize:
-    return QtCore.QSize(TILE_IMAGE_SIZE, TILE_IMAGE_SIZE)

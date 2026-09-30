@@ -27,7 +27,7 @@ from morefeatures.rib import feature as ribfeature
 from morefeatures.rib import geometry as ribgeometry
 from morefeatures.rib import parameters as ribparameters
 from morefeatures.rib import viewprovider as ribviewprovider
-from morefeatures.taskpanels import bosspanel, featurevisibility, fieldform, pointpicker, ribpanel
+from morefeatures.taskpanels import bosspanel, featurevisibility, fieldform, pointpicker, ribpanel, tiles
 
 for module in (
     morefeatures,
@@ -51,6 +51,7 @@ for module in (
     ribfeature,
     ribbuilder,
     fieldform,
+    tiles,
     pointpicker,
     featurevisibility,
     bosspanel,

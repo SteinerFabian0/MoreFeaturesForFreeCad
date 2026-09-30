@@ -23,6 +23,13 @@ def addParameterProperties(obj, parameterFields: tuple) -> None:
             setattr(obj, propertyName(field), list(field.choices))
 
 
+def addMissingParameterProperties(obj, parameterFields: tuple, defaultValues: dict) -> None:
+    """For files saved before a field existed: adds its property, set to its default value."""
+    missingFields = tuple(field for field in parameterFields if propertyName(field) not in obj.PropertiesList)
+    addParameterProperties(obj, missingFields)
+    writeParameterProperties(obj, missingFields, defaultValues)
+
+
 def writeParameterProperties(obj, parameterFields: tuple, values: dict) -> None:
     for field in parameterFields:
         setattr(obj, propertyName(field), values[field.name])

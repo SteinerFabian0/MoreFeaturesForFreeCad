@@ -25,7 +25,7 @@ def buildBossTemplate(parameters: BossParameters, gussetIndices: tuple) -> Part.
     boss = _buildBossBody(parameters)
     if gussetIndices and parameters.maxGussetHeight > 0.0:
         boss = boss.fuse(_buildGussets(parameters, gussetIndices))
-    if parameters.hasBoreInset:
+    if parameters.hasInset():
         boss = boss.cut(_buildInset(parameters))
     boss = boss.removeSplitter()
     if parameters.topFilletRadius > 0.0:
@@ -38,7 +38,7 @@ def _buildBossBody(parameters: BossParameters) -> Part.Shape:
 
 
 def _topRadius(parameters: BossParameters) -> float:
-    return parameters.baseDiameter / 2.0 - parameters.height * math.tan(math.radians(parameters.draftAngle))
+    return parameters.outerRadiusAt(parameters.height)
 
 
 def _buildGussets(parameters: BossParameters, gussetIndices: tuple) -> list:
@@ -93,6 +93,90 @@ def buildBoreTool(parameters: BossParameters) -> Part.Shape:
     overshootRadius = entryRadius + CUT_OVERSHOOT * taper
     bottomPosition = Vector(0.0, 0.0, parameters.height - depth)
     return _makeFrustum(bottomRadius, overshootRadius, depth + CUT_OVERSHOOT, bottomPosition)
+
+
+def buildScrewHeadCutter(parameters: BossParameters, partThickness: float) -> Part.Shape:
+    """The screw head boss's cutting tool in the template frame: the screw bore from the boss top down
+    to the screw seat, the screw seat bore from there on through the part, whose bottom face lies
+    partThickness below the sketch plane, and the rubber pad cutout in that bottom face."""
+    _checkScrewHeadFits(parameters, partThickness)
+    cutBottom = -partThickness - CUT_OVERSHOOT
+    cutter = _buildScrewSeatBore(parameters, cutBottom).fuse(_buildScrewBore(parameters))
+    if parameters.hasRubberPad():
+        rubberPadCutout = Part.makeCylinder(
+            parameters.rubberPadCutoutDiameter / 2.0,
+            parameters.rubberPadCutoutDepth + CUT_OVERSHOOT,
+            Vector(0.0, 0.0, cutBottom),
+            LOCAL_AXIS,
+        )
+        cutter = cutter.fuse(rubberPadCutout)
+    return cutter
+
+
+def _buildScrewSeatBore(parameters: BossParameters, cutBottom: float) -> Part.Shape:
+    # Widening downwards, like the screw bore, so the mould core pulls out through the part's bottom face.
+    screwSeatBore = _makeDownwardWideningHole(
+        parameters.screwSeatDiameter / 2.0,
+        parameters.seatHeight,
+        cutBottom,
+        parameters.seatHeight,
+        math.tan(math.radians(parameters.screwSeatDraftAngle)),
+    )
+    if parameters.screwSeatFilletRadius <= 0.0:
+        return screwSeatBore
+    rim = _findFlatFaceAt(screwSeatBore, parameters.seatHeight).OuterWire.Edges
+    return fillet.makeCheckedFillet(screwSeatBore, parameters.screwSeatFilletRadius, rim, "screw seat")
+
+
+def _buildScrewBore(parameters: BossParameters) -> Part.Shape:
+    # Reaching down into the flat seat's share of the wider screw seat bore, so the two never share a face.
+    bottom = parameters.seatHeight - min(CUT_OVERSHOOT, parameters.flatSeatWidth / 2.0)
+    screwBore = _makeDownwardWideningHole(
+        parameters.screwBoreDiameter / 2.0,
+        parameters.height,
+        bottom,
+        parameters.height + CUT_OVERSHOOT,
+        math.tan(math.radians(parameters.screwBoreDraftAngle)),
+    )
+    if parameters.entryChamferSize <= 0.0:
+        return screwBore
+    return screwBore.fuse(_buildEntryChamfer(parameters, bottom))
+
+
+def _buildEntryChamfer(parameters: BossParameters, bottom: float) -> Part.Shape:
+    top = parameters.seatHeight + parameters.entryChamferSize
+    radiusAtTop = parameters.screwBoreRadiusAt(top)
+    return _makeFrustum(radiusAtTop + (top - bottom), radiusAtTop, top - bottom, Vector(0.0, 0.0, bottom))
+
+
+def _checkScrewHeadFits(parameters: BossParameters, partThickness: float) -> None:
+    if parameters.topWallThickness > parameters.height:
+        raise ValueError("The top wall is thicker than the boss is high.")
+    if parameters.entryChamferSize >= parameters.topWallThickness:
+        raise ValueError("The entry chamfer is as deep as the top wall is thick.")
+    if parameters.flatSeatWidth <= 0.0:
+        raise ValueError(
+            "The screw bore, its entry chamfer and the screw seat fillet leave no flat screw seat for the head "
+            "to sit on."
+        )
+    if parameters.wallThicknessAtBase <= 0.0:
+        raise ValueError(
+            "The screw seat bore draft is so much steeper than the outside draft that the boss wall thins out "
+            "before its base."
+        )
+    if parameters.hasRubberPad() and parameters.rubberPadCutoutDepth >= partThickness:
+        raise ValueError(
+            "The rubber pad cutout ({0:.2f} mm deep) would break through the part, which is {1:.2f} mm thick "
+            "below the boss.".format(parameters.rubberPadCutoutDepth, partThickness)
+        )
+
+
+def _makeDownwardWideningHole(
+    radiusAtReference: float, referenceHeight: float, bottom: float, top: float, taper: float
+) -> Part.Shape:
+    bottomRadius = radiusAtReference + (referenceHeight - bottom) * taper
+    topRadius = radiusAtReference + (referenceHeight - top) * taper
+    return _makeFrustum(bottomRadius, topRadius, top - bottom, Vector(0.0, 0.0, bottom))
 
 
 def _filletTopEdge(boss: Part.Shape, parameters: BossParameters) -> Part.Shape:
