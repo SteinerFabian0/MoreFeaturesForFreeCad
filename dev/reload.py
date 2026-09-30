@@ -11,6 +11,7 @@ import importlib
 import morefeatures
 from morefeatures import (
     config,
+    cursorhint,
     cutterprofile,
     featureproperties,
     fillet,
@@ -44,6 +45,7 @@ for module in (
     config,
     selection,
     sketchpoints,
+    cursorhint,
     geometry,
     basefillet,
     viewprovider,

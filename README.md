@@ -106,7 +106,8 @@ Sketcher only: the command is available while a sketch is being edited.
 
 1. Select the lines, arcs, circles and points to mirror.
 2. Run **Sketch Mirror**. The selection stays highlighted as the list of
-   what will be mirrored.
+   what will be mirrored, and *Click mirror line* follows the cursor over
+   the 3D view.
 3. Click the mirror line: a line of the sketch (construction or not), an
    external edge that is a line, or the horizontal or vertical axis.
 
@@ -133,6 +134,8 @@ B-splines are not mirrored yet and are reported in the Report view.
     wizard previews it.
   - `fillet.py` - filleting that fails with a readable message.
   - `selection.py` - finding the sketch and Body a command works on.
+  - `cursorhint.py` - a label following the cursor over the 3D view, for
+    commands that wait for a click without a task panel.
   - `commands/` - one module per command: resources, selection checks,
     opening the task panel (or, for Sketch Mirror, waiting for the line).
   - `taskpanels/` - task panels. `fieldform.py` builds editors from a field

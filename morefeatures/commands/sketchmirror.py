@@ -16,6 +16,21 @@ USAGE_HINT = (
     "While editing a sketch, select the lines, arcs, circles and points to mirror, run Sketch Mirror, "
     "then click the line or axis to mirror them about."
 )
+# Rich text: search and tool tips render it, and it reads as steps there.
+TOOL_TIP = (
+    "<p>Mirrors sketch elements about a line. Each copy is held symmetric to its original by "
+    "constraints, so it follows every later edit of the original. A point on the mirror line is "
+    "joined to its copy, so a mirrored half profile closes.</p>"
+    "<ol>"
+    "<li>While editing a sketch, select the lines, arcs, circles and points to mirror.</li>"
+    "<li>Run Sketch Mirror. <i>Click mirror line</i> follows the cursor.</li>"
+    "<li>Click the mirror line: a line or construction line of the sketch, an external edge, "
+    "or the horizontal or vertical axis.</li>"
+    "</ol>"
+    "<p>Esc cancels before the line is clicked; Undo takes the whole mirror back. Ellipses, "
+    "conics and B-splines are not mirrored yet.</p>"
+)
+STATUS_TIP = "Mirror the selected sketch elements about a line clicked next, held symmetric by constraints"
 
 
 class SketchMirrorCommand:
@@ -26,8 +41,8 @@ class SketchMirrorCommand:
         return {
             "Pixmap": "SketchMirror",
             "MenuText": "Sketch Mirror",
-            "ToolTip": "Mirror sketch elements about a line, with a copy held symmetric to its original.\n"
-            + USAGE_HINT,
+            "ToolTip": TOOL_TIP,
+            "StatusTip": STATUS_TIP,
         }
 
     def Activated(self):

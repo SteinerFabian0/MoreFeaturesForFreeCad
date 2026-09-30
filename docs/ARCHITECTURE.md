@@ -282,6 +282,11 @@ already been drawn.
   singularity FreeCAD nudges its own arc copies for, issue #13551). The
   radius error this leaves is far below the solver's tolerance, so the
   solver never pulls the centre back exactly, even through later edits.
+- **Prompting without a task panel**: the Sketcher's own panel stays
+  open, so the command has none. While it waits, *Click mirror line*
+  follows the cursor over the 3D view (`cursorhint.py`, a child of the
+  main window polled to the cursor, since Wayland does not let an
+  application place tool tip windows), and the status bar says the same.
 - **Mirror lines**: sketch lines (construction or not), external edges
   that are lines, and the H and V axes. Mirroring about a point is not
   supported.
