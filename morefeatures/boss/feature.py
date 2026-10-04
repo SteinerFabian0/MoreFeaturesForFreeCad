@@ -213,7 +213,7 @@ def _placeBosses(obj, parameters: bossparameters.BossParameters) -> list:
                 templatesByGussetIndices[gussetIndices],
                 placement,
                 len(gussetIndices),
-                gussetIndices == parameters.allGussetIndices(),
+                gussetIndices == parameters.allGussetIndices() or not gussetIndices,
             )
         )
     return placedBosses

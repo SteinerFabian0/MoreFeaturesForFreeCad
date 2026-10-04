@@ -78,8 +78,9 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   pattern. A skipped gusset leaves a gap; the others keep their angles.
   Bosses leaving out the same gussets share one template, and the base
   fillet expects two gusset-to-boss edges per kept gusset. A boss with
-  any gusset skipped is meant to be anchored by hand, so it gets only
-  those gusset-to-boss fillets, no base fillet. Indices beyond the gusset
+  some gussets skipped is meant to be anchored by hand, so it gets only
+  those gusset-to-boss fillets, no base fillet. A boss with all gussets
+  skipped is a plain boss and gets the base fillet. Indices beyond the gusset
   count are dropped when the wizard commits.
 - **Bore diameter** is measured at the bore entry (top). **Bore bottom**
   is flat.

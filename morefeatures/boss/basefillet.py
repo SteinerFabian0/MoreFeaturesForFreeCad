@@ -22,7 +22,7 @@ class PlacedBoss:
     template: Part.Shape
     placement: App.Placement
     gussetCount: int
-    # A boss with a gusset left out gets anchored by hand, base fillet included.
+    # A boss with some but not all gussets left out gets anchored by hand, base fillet included.
     hasBaseFillet: bool
 
 
