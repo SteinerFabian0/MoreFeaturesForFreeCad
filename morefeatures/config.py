@@ -8,11 +8,13 @@ import json
 import FreeCAD as App
 
 from morefeatures.boss import parameters as bossparameters
+from morefeatures.pocketpush import parameters as pocketpushparameters
 from morefeatures.rib import parameters as ribparameters
 
 PARAMETER_PATH = "User parameter:BaseApp/Preferences/Mod/MoreFeaturesForFreeCad"
 LAST_BOSS_PARAMETERS_KEY = "LastBossParameters"
 LAST_RIB_PARAMETERS_KEY = "LastRibParameters"
+LAST_POCKET_PUSH_PARAMETERS_KEY = "LastPocketPushParameters"
 
 
 def getLastBossParameters() -> bossparameters.BossParameters:
@@ -35,6 +37,17 @@ def getLastRibParameters() -> ribparameters.RibParameters:
 
 def setLastRibParameters(parameters: ribparameters.RibParameters) -> None:
     _parameters().SetString(LAST_RIB_PARAMETERS_KEY, json.dumps(parameters.toDict()))
+
+
+def getLastPocketPushParameters() -> pocketpushparameters.PocketPushParameters:
+    storedJson = _parameters().GetString(LAST_POCKET_PUSH_PARAMETERS_KEY, "")
+    if not storedJson:
+        return pocketpushparameters.PocketPushParameters()
+    return pocketpushparameters.fromDict(json.loads(storedJson))
+
+
+def setLastPocketPushParameters(parameters: pocketpushparameters.PocketPushParameters) -> None:
+    _parameters().SetString(LAST_POCKET_PUSH_PARAMETERS_KEY, json.dumps(parameters.toDict()))
 
 
 def _parameters():

@@ -250,6 +250,79 @@ with rounded ends. The cutter's taper is the rib's draft.
 
 - Nothing for the ribs.
 
+## Pocket Push
+
+A cavity pushed into the part through a closed outline, wrapped in drafted
+walls of constant thickness, as a stamped sheet would be: the part is
+padded outward only where the cavity needs it.
+
+### Decided
+
+- **PartDesign only, one feature in the tree**, absorbing its outline
+  sketch and editing inside one transaction, exactly like the boss and rib
+  features. Inputs: cavity depth, draft angle (0–30°), side wall
+  thickness, top wall thickness, Reversed, inner corner radius, top
+  surface fillet radius and its Auto flag.
+- **Push direction** is against the sketch normal: a sketch on the face the
+  cavity opens in points out of the part. **Reversed** pushes along it,
+  for sketches whose normal points into the part.
+- **Cavity depth** runs from the sketch plane to the cavity floor, the
+  inside surface you can touch. The walls' outer height is cavity depth
+  plus top wall thickness.
+- **Every closed outline is one pocket.** Open outlines, and outlines that
+  overlap or lie inside one another, are an error. Walls of neighbouring
+  pockets that meet are fused.
+- **Build sequence, in memory on every recompute**, per outline:
+  1. cavity: a ruled loft from the outline at the sketch plane to the
+     outline shrunk by `depth × tan(draft)` at the cavity floor, so it is
+     widest at the sketch plane;
+  2. walls: the same, with the outline at each end grown by the side wall
+     offset, up to the outer height;
+  3. corner fillets on the edges along the pull direction of both solids,
+     then the top surface fillet on the walls.
+
+  Both 2D offsets keep sharp corners sharp (intersection join); every
+  rounding is a fillet. All walls are fused into the Body's previous
+  shape, then all cavities cut from it. `AddSubShape` is the walls minus
+  the cavities.
+- **The result is one valid solid, or an error.** Walls that do not join
+  the part (an outline drawn off it) are an error. A result the booleans
+  leave invalid is healed (`Shape.fix`), and an error if it stays invalid:
+  an invalid solid would otherwise be saved silently and only fail later,
+  in whichever feature next fillets or cuts it.
+- **Side wall thickness is measured square to the drafted wall**, so the
+  outline is grown by `thickness / cos(draft)` in the sketch plane. Inner
+  and outer walls are parallel, so a straight wall is exactly that thick.
+- **Corner radii follow sheet metal**: at every corner along the pull
+  direction the wall bends round one axis, with the inner corner radius on
+  the inside of the bend and that plus the side wall thickness on the
+  outside. So the cavity's corners get the inner corner radius where the
+  outline turns outward, and the walls' the outer corner radius; where it
+  turns inward (an L-shape's inside corner) it is the other way round.
+  Two fillets on parallel planes a wall thickness apart, with radii a wall
+  thickness apart, share their axis, so the wall is exactly as thick round
+  the corner as along it. Corners are told apart by geometry: an edge
+  whose two faces are not tangent, not on either end face, and concave if
+  a point just off it, along the difference of its faces' normals, lies
+  inside the solid. Corners the sketch already rounds have tangent faces
+  and are left alone.
+- **Top surface fillet** rounds only the outer edge round the walls' top
+  face, after the corner fillets. Auto (the default) makes it the outer
+  corner radius, so the top corners are spherical. The cavity floor's edge
+  stays sharp, so a top fillet larger than the walls are thick thins the
+  wall at the top edge.
+- **Too steep a draft is an error**: the ruled loft pairs the outlines at
+  both ends edge by edge, so an outline whose rounded corner, short edge
+  or whole area shrinks away over the outer height cannot be lofted. A
+  fillet that does not fit is an error naming it.
+- **Preview is the full result.** The cavity lies mostly inside the part,
+  so a compound preview as for bosses and ribs would hide it, and one fuse
+  and one cut are quick. There is no `IsPreviewing` flag.
+
+### Still open
+
+- Nothing yet.
+
 ## Sketch Mirror
 
 Not a wizard and not a feature: one command that edits the sketch being

@@ -23,6 +23,12 @@ from morefeatures import (
 )
 from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
 from morefeatures.commands import bosswizard, ribwizard, sketchmirror
+from morefeatures.commands import pocketpush as pocketpushcommand
+from morefeatures.pocketpush import builder as pocketpushbuilder
+from morefeatures.pocketpush import feature as pocketpushfeature
+from morefeatures.pocketpush import geometry as pocketpushgeometry
+from morefeatures.pocketpush import parameters as pocketpushparameters
+from morefeatures.pocketpush import viewprovider as pocketpushviewprovider
 from morefeatures.rib import builder as ribbuilder
 from morefeatures.rib import feature as ribfeature
 from morefeatures.rib import geometry as ribgeometry
@@ -31,7 +37,15 @@ from morefeatures.rib import viewprovider as ribviewprovider
 from morefeatures.sketchmirror import builder as sketchmirrorbuilder
 from morefeatures.sketchmirror import geometry as sketchmirrorgeometry
 from morefeatures.sketchmirror import linepicker, subelements
-from morefeatures.taskpanels import bosspanel, featurevisibility, fieldform, pointpicker, ribpanel, tiles
+from morefeatures.taskpanels import (
+    bosspanel,
+    featurevisibility,
+    fieldform,
+    pocketpushpanel,
+    pointpicker,
+    ribpanel,
+    tiles,
+)
 
 for module in (
     morefeatures,
@@ -42,6 +56,7 @@ for module in (
     fillet,
     parameters,
     ribparameters,
+    pocketpushparameters,
     config,
     selection,
     sketchpoints,
@@ -55,6 +70,10 @@ for module in (
     ribviewprovider,
     ribfeature,
     ribbuilder,
+    pocketpushgeometry,
+    pocketpushviewprovider,
+    pocketpushfeature,
+    pocketpushbuilder,
     sketchmirrorgeometry,
     subelements,
     sketchmirrorbuilder,
@@ -65,8 +84,10 @@ for module in (
     featurevisibility,
     bosspanel,
     ribpanel,
+    pocketpushpanel,
     bosswizard,
     ribwizard,
+    pocketpushcommand,
     sketchmirror,
     registry,
 ):

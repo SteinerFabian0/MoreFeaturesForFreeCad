@@ -18,7 +18,9 @@ creates one `Boss` feature in the Body: drafted boss, gussets, inset and
 top fillet, placed on every point, fused into the part, filleted into it
 and bored. Double-clicking the feature reopens the wizard to edit it. The
 **Rib Wizard** grows drafted ribs along the lines and arcs of a sketch,
-filleted where they meet or cross. **Sketch Mirror** mirrors sketch
+filleted where they meet or cross. **Pocket Push** pushes a drafted
+cavity into the part through every closed outline of a sketch, wrapped in
+walls of constant thickness. **Sketch Mirror** mirrors sketch
 elements about a line, as copies held symmetric by constraints. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
 sequence and what is still to be decided.
 
@@ -100,6 +102,42 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
    the corner. A radius too large for a short rib or a very sharp corner is
    reported in the panel.
 
+## Pocket Push
+
+PartDesign only.
+
+For a cavity that opens in one face of a thin part, like a battery tray in
+the underside of a plate: the cavity is pushed into the part, and where the
+part is too thin for it, walls of constant thickness wrap it and stand out
+of the opposite face, so there is no need to pad and pocket by hand.
+
+1. In a PartDesign Body, draw a sketch on the face the cavity opens in.
+   Each closed outline in it becomes one cavity. Outlines may not overlap
+   or lie inside one another; where their walls meet, they merge.
+2. Select the sketch and run **Pocket Push**.
+3. Enter the cavity depth (from the sketch plane to the cavity floor), the
+   draft angle, and the side and top wall thicknesses. The side wall
+   thickness is measured square to the drafted wall. The panel shows the
+   resulting outer height and previews the result live.
+4. **Inner corner radius** rounds the cavity's corners along the pull
+   direction. The outside corners get that radius plus the side wall
+   thickness (shown in the panel), so the wall keeps its thickness around
+   every corner. Corners the sketch already rounds keep their own radius.
+5. **Top surface fillet** rounds the outer edge around the top of the
+   walls. With **Auto** ticked (the default) it takes the outer corner
+   radius; untick it to enter your own, 0 for a sharp edge. The cavity
+   floor's edge stays sharp.
+6. The pocket is pushed against the sketch normal, which for a sketch on a
+   face points out of the part. Tick **Reversed** for a sketch whose normal
+   points into the part, such as one on a datum plane.
+7. Press OK. The sketch nests under the `PocketPush` feature; double-click
+   the feature to change it later.
+
+The cavity is widest at the sketch plane, so the core pulls out through
+it. A draft too steep for the depth, so that a rounded corner or the whole
+outline would shrink away, or a fillet too large to fit, is reported in the
+panel.
+
 ## Sketch Mirror
 
 Sketcher only: the command is available while a sketch is being edited.
@@ -141,7 +179,8 @@ B-splines are not mirrored yet and are reported in the Report view.
   - `taskpanels/` - task panels. `fieldform.py` builds editors from a field
     schema, `tiles.py` the picture buttons modes are picked with, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
-    panel, `featurevisibility.py` what both show while editing.
+    panel, `pocketpushpanel.py` the Pocket Push panel,
+    `featurevisibility.py` what they show while editing.
   - `featureproperties.py` - mirrors a field schema onto a document object
     as FreeCAD properties.
   - `addoncheck.py` - makes a saved feature fail its recompute loudly when
@@ -154,6 +193,8 @@ B-splines are not mirrored yet and are reported in the Report view.
     panel calls).
   - `rib/` - the rib feature, laid out like `boss/`; `geometry.py` sweeps
     the cutter along the path.
+  - `pocketpush/` - the pocket push feature, laid out like `boss/`;
+    `geometry.py` builds the drafted cavities and walls.
   - `sketchmirror/` - Sketch Mirror: `geometry.py` (mirrored copies),
     `subelements.py` (selection names as sketcher geometry ids),
     `builder.py` (adds the copies and their constraints) and
