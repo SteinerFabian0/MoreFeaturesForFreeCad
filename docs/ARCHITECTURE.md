@@ -323,6 +323,55 @@ padded outward only where the cavity needs it.
 
 - Nothing yet.
 
+## Hole Fill
+
+A closed perimeter filled with round holes in a hexagonal pattern, each
+cut through the part, as for a perforated speaker grille.
+
+### Decided
+
+- **PartDesign only, one feature in the tree**, absorbing its perimeter
+  sketch and editing inside one transaction, exactly like the other
+  features. It is a `PartDesign::FeatureSubtractivePython`; `AddSubShape`
+  is the material the holes remove. Inputs: hole diameter, pitch,
+  Reversed.
+- **The sketch holds exactly one closed perimeter.** Anything else is an
+  error.
+- **Hexagonal pattern, anchored on the perimeter's centre of area**: one
+  hole sits there, rows run along the sketch's X axis, `pitch` apart within
+  a row and `pitch × √3/2` from row to row, every other row shifted by half
+  a pitch, so each hole has six neighbours at one pitch. The pitch must be
+  larger than the hole diameter.
+- **Only holes that fit inside the perimeter whole**: a hole's centre must
+  lie inside the perimeter shrunk by the hole radius (`makeOffset2D`, arc
+  join). The perimeter is never nicked. This matches SolidWorks: a 37.5 mm
+  circle, 0.9 mm holes, 1.7 mm pitch gives 421 holes in both.
+- **Each hole is cut until it first comes out of the part.** Every hole is
+  a cylinder from the sketch plane on through all of the part (against the
+  sketch normal, or along it with Reversed). The cylinders are intersected
+  with the Body's previous shape in one boolean, and only the pieces that
+  start at the sketch plane are cut from the part in a second. So a hole
+  runs on through a rib it meets, wherever it meets it, but stops at an air
+  gap, leaving material beyond it whole. Measuring along the hole's axis,
+  as the screw head boss does, would miss a rib under only part of a hole.
+  A single general fuse would cost one boolean instead of two, but needs
+  the pieces matched to their hole by `hashCode`, which collides among a
+  few thousand pieces.
+- **Cost**: two booleans with every hole, about 2 s for 421 holes and 7 s
+  for 2000. More than 10000 holes (estimated from the area) is an error,
+  so a mistyped pitch cannot freeze FreeCAD.
+- **The result is one valid solid, or an error**, as for Pocket Push, but
+  without healing: plain cylinder cuts have not needed it.
+- **Preview is the full result**, as for Pocket Push: the holes lie in the
+  part, so a compound preview would hide them.
+- **Panel readouts**: land between holes (pitch minus diameter), open area
+  of the endless pattern (`π D² / (2√3 P²)`), and the hole count, read from
+  the feature's read-only `HoleCount` after each preview.
+
+### Still open
+
+- Nothing yet.
+
 ## Sketch Mirror
 
 Not a wizard and not a feature: one command that edits the sketch being

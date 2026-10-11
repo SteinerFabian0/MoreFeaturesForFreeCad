@@ -20,7 +20,9 @@ and bored. Double-clicking the feature reopens the wizard to edit it. The
 **Rib Wizard** grows drafted ribs along the lines and arcs of a sketch,
 filleted where they meet or cross. **Pocket Push** pushes a drafted
 cavity into the part through every closed outline of a sketch, wrapped in
-walls of constant thickness. **Sketch Mirror** mirrors sketch
+walls of constant thickness. **Hole Fill** fills the closed perimeter of
+a sketch with round holes in a hexagonal pattern, as for a perforated
+speaker grille. **Sketch Mirror** mirrors sketch
 elements about a line, as copies held symmetric by constraints. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the build
 sequence and what is still to be decided.
 
@@ -138,6 +140,33 @@ it. A draft too steep for the depth, so that a rounded corner or the whole
 outline would shrink away, or a fillet too large to fit, is reported in the
 panel.
 
+## Hole Fill
+
+PartDesign only.
+
+For a perforated area such as a speaker grille: a perimeter filled with
+round holes in a hexagonal pattern, each cut through the part.
+
+1. In a PartDesign Body, draw a sketch on the face the holes open in,
+   holding **one closed perimeter**, e.g. a circle.
+2. Select the sketch and run **Hole Fill**.
+3. Enter the hole diameter and the pitch, the distance from a hole's
+   centre to each of its six neighbours. The pitch must be larger than the
+   hole diameter. The panel shows the land between holes, the open area of
+   the pattern and how many holes fit, and previews the result live.
+4. Holes are cut against the sketch normal, which for a sketch on a face
+   points out of the part. Tick **Reversed** for a sketch whose normal
+   points into the part, such as one on a datum plane.
+5. Press OK. The sketch nests under the `HoleFill` feature; double-click
+   the feature to change it later.
+
+One hole sits on the perimeter's centre of area, with rows along the
+sketch's X axis, and only holes that fit inside the perimeter whole are
+cut, so the edge is never nicked. A 37.5 mm circle with 0.9 mm holes at
+1.7 mm pitch gets 421 holes. Each hole runs from the sketch plane until it
+first comes out of the part: through a rib below the plate if it hits one,
+but not on into material below an air gap.
+
 ## Sketch Mirror
 
 Sketcher only: the command is available while a sketch is being edited.
@@ -180,6 +209,7 @@ B-splines are not mirrored yet and are reported in the Report view.
     schema, `tiles.py` the picture buttons modes are picked with, `pointpicker.py` does click-to-toggle picking in the 3D view,
     `bosspanel.py` is the Boss Wizard panel, `ribpanel.py` the Rib Wizard
     panel, `pocketpushpanel.py` the Pocket Push panel,
+    `holefillpanel.py` the Hole Fill panel,
     `featurevisibility.py` what they show while editing.
   - `featureproperties.py` - mirrors a field schema onto a document object
     as FreeCAD properties.
@@ -195,6 +225,9 @@ B-splines are not mirrored yet and are reported in the Report view.
     the cutter along the path.
   - `pocketpush/` - the pocket push feature, laid out like `boss/`;
     `geometry.py` builds the drafted cavities and walls.
+  - `holefill/` - the hole fill feature, laid out like `boss/`;
+    `geometry.py` lays out the hole pattern and finds where each hole
+    comes out of the part.
   - `sketchmirror/` - Sketch Mirror: `geometry.py` (mirrored copies),
     `subelements.py` (selection names as sketcher geometry ids),
     `builder.py` (adds the copies and their constraints) and

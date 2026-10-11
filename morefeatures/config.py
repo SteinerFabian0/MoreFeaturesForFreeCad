@@ -8,6 +8,7 @@ import json
 import FreeCAD as App
 
 from morefeatures.boss import parameters as bossparameters
+from morefeatures.holefill import parameters as holefillparameters
 from morefeatures.pocketpush import parameters as pocketpushparameters
 from morefeatures.rib import parameters as ribparameters
 
@@ -15,6 +16,7 @@ PARAMETER_PATH = "User parameter:BaseApp/Preferences/Mod/MoreFeaturesForFreeCad"
 LAST_BOSS_PARAMETERS_KEY = "LastBossParameters"
 LAST_RIB_PARAMETERS_KEY = "LastRibParameters"
 LAST_POCKET_PUSH_PARAMETERS_KEY = "LastPocketPushParameters"
+LAST_HOLE_FILL_PARAMETERS_KEY = "LastHoleFillParameters"
 
 
 def getLastBossParameters() -> bossparameters.BossParameters:
@@ -48,6 +50,17 @@ def getLastPocketPushParameters() -> pocketpushparameters.PocketPushParameters:
 
 def setLastPocketPushParameters(parameters: pocketpushparameters.PocketPushParameters) -> None:
     _parameters().SetString(LAST_POCKET_PUSH_PARAMETERS_KEY, json.dumps(parameters.toDict()))
+
+
+def getLastHoleFillParameters() -> holefillparameters.HoleFillParameters:
+    storedJson = _parameters().GetString(LAST_HOLE_FILL_PARAMETERS_KEY, "")
+    if not storedJson:
+        return holefillparameters.HoleFillParameters()
+    return holefillparameters.fromDict(json.loads(storedJson))
+
+
+def setLastHoleFillParameters(parameters: holefillparameters.HoleFillParameters) -> None:
+    _parameters().SetString(LAST_HOLE_FILL_PARAMETERS_KEY, json.dumps(parameters.toDict()))
 
 
 def _parameters():

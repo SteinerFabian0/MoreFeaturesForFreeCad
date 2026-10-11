@@ -23,7 +23,13 @@ from morefeatures import (
 )
 from morefeatures.boss import basefillet, builder, feature, geometry, parameters, viewprovider
 from morefeatures.commands import bosswizard, ribwizard, sketchmirror
+from morefeatures.commands import holefill as holefillcommand
 from morefeatures.commands import pocketpush as pocketpushcommand
+from morefeatures.holefill import builder as holefillbuilder
+from morefeatures.holefill import feature as holefillfeature
+from morefeatures.holefill import geometry as holefillgeometry
+from morefeatures.holefill import parameters as holefillparameters
+from morefeatures.holefill import viewprovider as holefillviewprovider
 from morefeatures.pocketpush import builder as pocketpushbuilder
 from morefeatures.pocketpush import feature as pocketpushfeature
 from morefeatures.pocketpush import geometry as pocketpushgeometry
@@ -41,6 +47,7 @@ from morefeatures.taskpanels import (
     bosspanel,
     featurevisibility,
     fieldform,
+    holefillpanel,
     pocketpushpanel,
     pointpicker,
     ribpanel,
@@ -57,6 +64,7 @@ for module in (
     parameters,
     ribparameters,
     pocketpushparameters,
+    holefillparameters,
     config,
     selection,
     sketchpoints,
@@ -74,6 +82,10 @@ for module in (
     pocketpushviewprovider,
     pocketpushfeature,
     pocketpushbuilder,
+    holefillgeometry,
+    holefillviewprovider,
+    holefillfeature,
+    holefillbuilder,
     sketchmirrorgeometry,
     subelements,
     sketchmirrorbuilder,
@@ -85,9 +97,11 @@ for module in (
     bosspanel,
     ribpanel,
     pocketpushpanel,
+    holefillpanel,
     bosswizard,
     ribwizard,
     pocketpushcommand,
+    holefillcommand,
     sketchmirror,
     registry,
 ):
