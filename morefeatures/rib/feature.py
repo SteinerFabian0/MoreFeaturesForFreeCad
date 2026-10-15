@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
-# The Rib Wizard's document object: one PartDesign feature that rebuilds the ribs from its path
-# sketch and cutter parameters on each recompute.
+# The Rib Wizard's document object: one PartDesign feature that builds the ribs from its path
+# sketch and cutter parameters, and fuses them into the part on each recompute.
+
+import functools
 
 import FreeCAD as App
 import Part
 
 from morefeatures import addoncheck, featureproperties, preview
-from morefeatures.rib import geometry, viewprovider
+from morefeatures.rib import cache, geometry, viewprovider
 from morefeatures.rib import parameters as ribparameters
 
 FEATURE_TYPE_ID = "PartDesign::FeatureAdditivePython"
@@ -24,22 +26,38 @@ class RibFeature:
         )
         preview.addPreviewProperty(obj)
         featureproperties.addParameterProperties(obj, ribparameters.PARAMETER_FIELDS)
+        cache.addKeyProperty(obj)
         addoncheck.installAddonCheck(obj)
         obj.Proxy = self
 
     def onDocumentRestored(self, obj) -> None:
+        featureproperties.addMissingParameterProperties(
+            obj, ribparameters.PARAMETER_FIELDS, ribparameters.RibParameters().toDict()
+        )
+        cache.addKeyProperty(obj)
         preview.addPreviewProperty(obj)
         addoncheck.installAddonCheck(obj)
 
     def execute(self, obj) -> None:
         sketchNormal = obj.Sketch.Placement.Rotation.multVec(SKETCH_NORMAL)
-        ribs = geometry.buildRibs(obj.Sketch.Shape.Edges, sketchNormal, readParameters(obj))
-        obj.AddSubShape = ribs
+        baseShape = obj.BaseFeature.Shape if obj.BaseFeature is not None else None
+        pathEdges = obj.Sketch.Shape.Edges
+        parameters = readParameters(obj)
+        buriedJunctions = geometry.findBuriedJunctions(pathEdges, sketchNormal, baseShape)
+        ribsKey = cache.ribsKey(pathEdges, sketchNormal, parameters, buriedJunctions)
+        ribs = cache.cachedRibs(obj, ribsKey)
         if preview.isPreviewing(obj):
-            baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
+            if ribs is None:
+                pieces = geometry.buildRibPieces(pathEdges, sketchNormal, parameters, buriedJunctions)
+                ribs = Part.makeCompound(pieces)
+                cache.keepUnfused(obj, ribs)
+            baseShapes = [baseShape] if baseShape is not None else []
             obj.Shape = Part.makeCompound(baseShapes + [ribs])
-        else:
-            obj.Shape = _fuseIntoBase(obj, ribs)
+            return
+        if ribs is None:
+            ribs = geometry.buildRibs(pathEdges, sketchNormal, parameters, buriedJunctions)
+            cache.keepRibs(obj, ribs, ribsKey)
+        obj.Shape = _fuseIntoBase(obj, ribs)
 
     def dumps(self):
         return None
@@ -70,7 +88,15 @@ def readParameters(obj) -> ribparameters.RibParameters:
 def _fuseIntoBase(obj, ribs: Part.Shape) -> Part.Shape:
     if obj.BaseFeature is None:
         return ribs
-    fused = obj.BaseFeature.Shape.fuse(ribs)
+    baseShape = obj.BaseFeature.Shape
+    fused = baseShape.fuse(ribs)
+    if not fused.isValid():
+        # One boolean with every separate rib network now and then leaves an invalid solid where
+        # fusing the networks in one at a time does not.
+        fused = functools.reduce(lambda part, network: part.fuse(network), ribs.Solids, baseShape)
+        # Features after this one cannot fillet or cut an invalid solid, so it must not leave one behind.
+        if not fused.isValid():
+            raise ValueError("The ribs could not be fused into the part as a valid solid.")
     if obj.Refine:
         fused = fused.removeSplitter()
     return fused.Solids[0] if len(fused.Solids) == 1 else fused

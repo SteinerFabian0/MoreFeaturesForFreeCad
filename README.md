@@ -18,7 +18,7 @@ creates one `Boss` feature in the Body: drafted boss, gussets, inset and
 top fillet, placed on every point, fused into the part, filleted into it
 and bored. Double-clicking the feature reopens the wizard to edit it. The
 **Rib Wizard** grows drafted ribs along the lines and arcs of a sketch,
-filleted where they meet or cross. **Pocket Push** pushes a drafted
+filleted where they meet or cross and where they stand on the part. **Pocket Push** pushes a drafted
 cavity into the part through every closed outline of a sketch, wrapped in
 walls of constant thickness. **Hole Fill** fills the closed perimeter of
 a sketch with round holes in a hexagonal pattern, as for a perforated
@@ -89,7 +89,7 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
 
 1. In a PartDesign Body, draw a sketch of the rib centre lines on the face
    the ribs grow from. Lines and arcs only; an arc must be wider than the
-   rib is at its base.
+   rib is at its base, base fillet included.
 2. Select the sketch and run **Rib Wizard**.
 3. Pick the cutter's tip (ball, flat, or flat with a corner radius), its
    size, the taper angle (the rib's draft, 0 for none, up to 45°) and the
@@ -103,6 +103,12 @@ meet, cross or end, the rib is rounded the way the cutter would leave it.
    its base. With a ball tip this can leave a small dip in the rib top at
    the corner. A radius too large for a short rib or a very sharp corner is
    reported in the panel.
+5. The rib base fillet radius (0.5 mm by default, 0 for none) rounds the
+   ribs into the face they stand on. Injection moulding guidelines put it
+   at 0.25 to 0.4 times the wall thickness there. With a crossings fillet,
+   that radius must be the larger one. A rib that ends inside a boss or a
+   wall gets no base fillet round that end, so it never shows through into
+   a bore or the far side of the wall.
 
 ## Pocket Push
 
@@ -218,11 +224,12 @@ B-splines are not mirrored yet and are reported in the Report view.
   - `boss/` - everything specific to the boss feature: `parameters.py` (the
     inputs and their schema), `geometry.py` (the in-memory boss template),
     `feature.py` (the PartDesign feature that places and fuses it),
-    `basefillet.py` (the boss base fillet on the fused part),
+    `basefillet.py` (the base fillet, rounded once on the boss template),
     `viewprovider.py` (its look in the GUI) and `builder.py` (the seam the
     panel calls).
   - `rib/` - the rib feature, laid out like `boss/`; `geometry.py` sweeps
-    the cutter along the path.
+    the cutter along the path, `cache.py` keeps the built ribs between
+    recomputes.
   - `pocketpush/` - the pocket push feature, laid out like `boss/`;
     `geometry.py` builds the drafted cavities and walls.
   - `holefill/` - the hole fill feature, laid out like `boss/`;

@@ -4,6 +4,8 @@
 # The Boss Wizard's document object: one PartDesign feature that rebuilds every boss from its
 # sketch points and parameters on each recompute.
 
+from dataclasses import dataclass
+
 import FreeCAD as App
 import Part
 
@@ -17,6 +19,12 @@ INSTANCES_GROUP = "Instances"
 SKIPPED_GUSSETS_PROPERTY = "SkippedGussets"
 PROBE_TOLERANCE = 1e-4
 LEGACY_BASE_DIAMETER_PROPERTY = "BaseDiameter"
+
+
+@dataclass
+class PlacedBoss:
+    template: Part.Shape
+    placement: App.Placement
 
 
 class BossFeature:
@@ -57,7 +65,7 @@ class BossFeature:
         if preview.isPreviewing(obj):
             obj.Shape = _buildPreview(obj, parameters, bosses, cutters)
         else:
-            obj.Shape = _buildFinalShape(obj, parameters, placedBosses, bosses, cutters)
+            obj.Shape = _buildFinalShape(obj, bosses, cutters)
 
     def dumps(self):
         return None
@@ -130,12 +138,8 @@ def _takeLegacyBaseDiameter(obj):
     return baseDiameter
 
 
-def _buildFinalShape(
-    obj, parameters: bossparameters.BossParameters, placedBosses: list, bosses: list, cutters: list
-) -> Part.Shape:
+def _buildFinalShape(obj, bosses: list, cutters: list) -> Part.Shape:
     result = _fuseIntoBase(obj, bosses)
-    if bosses and obj.BaseFeature is not None and parameters.baseFilletRadius > 0.0:
-        result = basefillet.filletBossBases(result, placedBosses, parameters.baseFilletRadius)
     if cutters:
         # Cut after the fuse, so each bore may run on into the part below its boss.
         result = result.cut(cutters)
@@ -143,8 +147,8 @@ def _buildFinalShape(
 
 
 def _buildPreview(obj, parameters: bossparameters.BossParameters, bosses: list, cutters: list) -> Part.Shape:
-    """Fast enough to rebuild on every input change: no fuse, no base fillet, and each boss is cut
-    by its own cutter only."""
+    """Fast enough to rebuild on every input change: no fuse, and each boss is cut by its own
+    cutter only."""
     cutBosses = [boss.cut(cutter) for boss, cutter in zip(bosses, cutters)] if cutters else bosses
     baseShapes = [obj.BaseFeature.Shape] if obj.BaseFeature is not None else []
     if baseShapes and cutters and parameters.isScrewHeadBoss():
@@ -204,19 +208,20 @@ def _placeBosses(obj, parameters: bossparameters.BossParameters) -> list:
         pointKey = str(point.geometryId)
         gussetIndices = parameters.keptGussetIndices(skippedGussets.get(pointKey, ()))
         if gussetIndices not in templatesByGussetIndices:
-            templatesByGussetIndices[gussetIndices] = geometry.buildBossTemplate(parameters, gussetIndices)
+            templatesByGussetIndices[gussetIndices] = _buildTemplate(obj, parameters, gussetIndices)
         placement = obj.Sketch.Placement.multiply(
             App.Placement(point.localPosition, App.Rotation(geometry.LOCAL_AXIS, rotationOffsets.get(pointKey, 0.0)))
         )
-        placedBosses.append(
-            basefillet.PlacedBoss(
-                templatesByGussetIndices[gussetIndices],
-                placement,
-                len(gussetIndices),
-                gussetIndices == parameters.allGussetIndices() or not gussetIndices,
-            )
-        )
+        placedBosses.append(PlacedBoss(templatesByGussetIndices[gussetIndices], placement))
     return placedBosses
+
+
+def _buildTemplate(obj, parameters: bossparameters.BossParameters, gussetIndices: tuple) -> Part.Shape:
+    template = geometry.buildBossTemplate(parameters, gussetIndices)
+    # Without a part below, there is no face to round the boss into.
+    if obj.BaseFeature is None or parameters.baseFilletRadius <= 0.0:
+        return template
+    return basefillet.filletBase(template, len(gussetIndices), parameters.baseFilletRadius)
 
 
 def _fuseIntoBase(obj, bosses: list) -> Part.Shape:

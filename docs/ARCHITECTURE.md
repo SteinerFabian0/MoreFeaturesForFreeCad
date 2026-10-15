@@ -46,8 +46,8 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 - **Live preview while the wizard is open.** Every input change (debounced)
   writes the request into the feature and recomputes that feature alone,
   with a hidden, unsaved `IsPreviewing` flag set. In preview the feature
-  skips the fuse and the base fillet: its shape is a compound of the
-  base shape and the placed bosses, each bored on its own. The panel
+  skips the fuse: its shape is a compound of the base shape and the
+  placed bosses, base fillet included, each bored on its own. The panel
   shows only the boss feature meanwhile. OK clears the flag and runs the
   full document recompute; Cancel restores the previous visibility.
 - **Build sequence, in memory on every recompute.** Nothing is stored
@@ -56,12 +56,13 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
   1. Template (`boss/geometry.py`), in a local frame (base on the origin,
      axis +Z): drafted boss → all kept gussets at once (profile extruded
      along the gusset angle, no pattern) → gussets cut off below z = 0 and
-     above their height cap → inset → top fillet on the boss's top rim.
+     above their height cap → inset → top fillet on the boss's top rim →
+     base fillet, when there is a part below to round it into.
   2. In the Body (`boss/feature.py`): for each non-ignored point, copy the
      template for its skipped gussets, rotate it about its axis by the instance's offset, and place
      it with the sketch's placement, so the sketch normal is the boss axis
      → fuse all copies into the Body's previous shape in one boolean →
-     boss base fillet on the fused result → bores cut into the fused result.
+     bores cut into the fused result.
 - **Bore** is cut once, after the fuse, into every boss. It starts at the
   boss top, narrows by the bore draft and ends flat. Its depth is at most
   0.6 mm more than the boss height (larger values are clamped), so it may
@@ -77,23 +78,26 @@ command (commands/)  ->  task panel (taskpanels/)  ->  builder (<feature>/builde
 - **Skipped gussets**, stored per sketch point as indices into the gusset
   pattern. A skipped gusset leaves a gap; the others keep their angles.
   Bosses leaving out the same gussets share one template, and the base
-  fillet expects two gusset-to-boss edges per kept gusset. A boss with
-  some gussets skipped is meant to be anchored by hand, so it gets only
-  those gusset-to-boss fillets, no base fillet. A boss with all gussets
-  skipped is a plain boss and gets the base fillet. Indices beyond the gusset
-  count are dropped when the wizard commits.
+  fillet expects two gusset-to-boss edges per kept gusset. Every boss gets
+  the base fillet, round its kept gussets, however many are skipped.
+  Indices beyond the gusset count are dropped when the wizard commits.
 - **Bore diameter** is measured at the bore entry (top). **Bore bottom**
   is flat.
-- **Boss base fillet** is one fillet with one radius, on the fused
-  result: the chain where each boss (and its gussets) meets the face it
-  stands on, plus both flat sides of every gusset where they meet the boss
-  wall. Separate base and gusset fillets fail when their radii are equal,
-  since each would roll into the other's rounded corner. Edges are found
-  by geometry: the placed template footprint bordering an upward-facing
-  flat face in the sketch plane, and edges between the boss's round wall
+- **Boss base fillet** is one fillet with one radius, on the template:
+  the chain where the boss (and its gussets) meets the face it stands on,
+  plus both flat sides of every gusset where they meet the boss wall.
+  Separate base and gusset fillets fail when their radii are equal, since
+  each would roll into the other's rounded corner. The template is
+  filleted standing on a slab in z = 0, as on an endless flat face, and
+  the slab is cut away again, so the template carries its fillet into the
+  fuse. Filleting the fused part instead fails as soon as anything stands
+  within the fillet's reach of a boss (a boss 0.2 mm from a wall leaves no
+  room for a 0.5 mm fillet), while a fillet carried in simply merges into
+  that wall. Edges are found by geometry: the template's footprint
+  bordering the slab's top face, and edges between the boss's round wall
   and a sloped flat face (exactly two per gusset, else an error). The
-  sketch must lie on the face the bosses stand on. A boss hanging over the
-  part's edge leaves an open chain, which does not fillet.
+  sketch must lie on the face the bosses stand on; a boss closer than the
+  fillet radius to that face's edge gets its fillet hanging over the edge.
 - **Gusset angle** is 20–70°. Shallower, only the rounded ridge reaches the
   boss; steeper, drafted gussets grow wide enough to swallow the boss wall.
 - **Gusset height** = base length × tan(angle), capped 0.5 mm below the
@@ -201,9 +205,9 @@ with rounded ends. The cutter's taper is the rib's draft.
 - **Path edges are lines and arcs** (full circles included). Another curve
   type is an error. An arc must be wider than the rib is at its base, or
   its inner flank would fold over the arc's centre.
-- **The rib is the exact volume the cutter sweeps**, built in memory on
-  every recompute from pieces that meet on shared flat faces, then fused
-  into the Body's previous shape in one boolean:
+- **The rib is the exact volume the cutter sweeps**, built in memory from
+  pieces that meet on shared flat faces, then fused into the Body's
+  previous shape in one boolean:
   1. every edge sweeps the cutter's whole silhouette (drawn in the plane
      across the edge at its start, tip at the rib height, foot on the
      sketch plane): extruded along a line, revolved about an arc's centre;
@@ -233,13 +237,71 @@ with rounded ends. The cutter's taper is the rib's draft.
     sharp for one such pass, or a path too short to reach the arc, is an
     error naming the fillet radius.
   - The ribs without fillets are fused first. The fillet sweeps are fused
-    into them and the result is checked: valid, a plausible volume, and
-    every fillet sweep inside it (a boolean can silently drop a piece).
+    into them and the result is checked: valid and a plausible volume.
     A failed check retries with a slightly different overlap, and only
-    then reports an error.
+    then reports an error. A retry is also checked for every fillet sweep
+    lying inside it: retries were seen to drop a whole sweep silently,
+    leaving one corner sharp, which no volume bound catches. The first
+    attempt skips that check, which costs as much as the fuse itself
+    (4.5 s of a 13 s build on a 600 mm rib network); none were seen to
+    drop a sweep there.
+- **The rib base fillet is a toolpath too**: the cutter's silhouette flares
+  out at its foot into a concave arc tangent to the flank, so every sweep,
+  wedge and crossings fillet arc carries its own base fillet, and the ribs
+  arrive at the fuse already rounded into the face they stand on.
+  OpenCascade's fillet on the fused part fails on a rib network: all foot
+  edges at once never fillet, and many fail even alone, mostly where the
+  crossings fillet arcs meet the paths.
+  - The arc's circle dips 1% of its radius below the sketch plane, so the
+    fillet meets the face at about 8° instead of tangentially, and the
+    knife-edged foot of the flare lies inside the part, 0.005 mm below
+    the face for a 0.5 mm fillet. Exactly tangent, the foot lies on the
+    face itself, and the fuse into the part now and then leaves a
+    zero-volume solid in that face.
+  - A wedge at a junction inside the Body's previous shape (a spoke ending
+    inside a boss or a wall) has no face there to be rounded into, so it
+    is swept without the flare. With it, the flare showed through the
+    far side of the wall or in a boss's bore. A point just above each
+    junction is classified in one boolean of the part with all of them,
+    six times as fast as a point-in-solid test for each.
+  - The flare reaches further from the path than the rib does, so a path
+    arc must be wider than the flare reaches, and the crossings fillet
+    radius larger than the base fillet radius (the flare would fold over
+    the fillet arc's centre otherwise). The flare must also meet the flank
+    below the tip's rounding. Each is an error naming the radius.
+  - Fusing every separate rib network into the part in one boolean now
+    and then leaves an invalid solid where fusing them one at a time does
+    not; an invalid result is retried that way, and is an error if it
+    stays invalid.
+- **The ribs are kept between recomputes** (`rib/cache.py`), so a change
+  above the feature in the tree only fuses them into the new part again:
+  on a 600 mm rib network the feature recomputes in under 2 s instead of
+  9 s, most of it that fuse.
+  - The fused ribs stay in the feature's `AddSubShape`, which FreeCAD
+    saves with the file anyway, next to a hidden `RibsKey`: a hash of
+    everything they are built from. That is five points along each path
+    edge, the sketch normal, the parameters, the junctions found inside
+    the part, and the source of `rib/geometry.py` and `cutterprofile.py`.
+    A recompute whose key matches skips building them. The key is pure
+    geometry, so no topological names are involved.
+  - The buried junctions are in the key because the part below decides
+    which wedges lose the base fillet flare: deleting a boss a spoke runs
+    into builds the ribs again.
+  - The source is in the key so that ribs saved in a file are built again
+    once the addon's rib code changes, instead of keeping the old shape.
+  - Coordinates are rounded to 1e-9 mm, so a sketch solved again to the
+    same geometry still matches.
+  - A file saved before the key existed builds its ribs once.
+  - The bosses are not cached: each recompute is mostly their own fuse
+    into the part, about 0.5 s per feature on the same part.
 - **Live preview as in the boss wizard**: the same hidden `IsPreviewing`
-  flag (`preview.py`), the Body's previous shape and the fused ribs as a
-  compound, no fuse into the part.
+  flag (`preview.py`), the Body's previous shape and the rib sweeps as a
+  compound, unfused: the sweeps overlap and their seams show, but fusing
+  them takes most of the build (about 1 s instead of 10 s on a 600 mm rib
+  network). A fuse that fails therefore only shows on OK. The unfused
+  sweeps clear the key. While the inputs still match it, as when the
+  wizard opens, the preview shows the kept ribs instead, and OK with
+  nothing changed only fuses them.
 - **Visibility while editing** (both wizards, `featurevisibility.py`): the
   feature alone is shown while the wizard is open. Cancel restores nothing
   by hand, because aborting the transaction also undoes visibility

@@ -157,8 +157,9 @@ class RibTaskPanel:
         heightLayout = QtWidgets.QFormLayout()
         heightLayout.addRow(self.fieldEditors.label("ribHeight"), self.fieldEditors.editor("ribHeight"))
         layout.addLayout(heightLayout)
-        layout.addWidget(self.fieldEditors.label("crossingFilletRadius"))
-        layout.addWidget(self.fieldEditors.editor("crossingFilletRadius"))
+        for name in ("crossingFilletRadius", "baseFilletRadius"):
+            layout.addWidget(self.fieldEditors.label(name))
+            layout.addWidget(self.fieldEditors.editor(name))
         return group
 
     def _buildBaseWidthLabel(self) -> QtWidgets.QLabel:

@@ -5,10 +5,11 @@
 # the cutter's whole profile. Where paths end, meet or cross, a wedge of the revolved cutter closes
 # the gap on the outside of a turn. With a crossing fillet the cutter also runs along an arc from
 # path to path in every inside corner, as a mould maker rounds the corner of the steel between two
-# cavities, and clears what steel that arc would leave standing in a sharp corner.
+# cavities, and clears what steel that arc would leave standing in a sharp corner. A base fillet
+# flares the cutter's foot, so every sweep rounds the rib into the face it stands on.
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import Part
 from FreeCAD import Vector
@@ -25,6 +26,8 @@ ANGLE_TOLERANCE = 1e-9
 FILLET_ARC_OVERLAPS = (0.01, 0.005, 0.02, 0.0025)
 # A fused result is only trusted if no more than this fraction of any fillet sweep is missing from it.
 MISSING_VOLUME_TOLERANCE = 1e-4
+# How far above the sketch plane a junction is probed for lying inside the part.
+BURIED_PROBE_HEIGHT = 0.01
 
 
 @dataclass(frozen=True)
@@ -33,16 +36,27 @@ class RibCutter:
     ribHeight: float
     # The sketch normal: the cutter's axis, pointing from the sketch plane towards the tip.
     axis: Vector
+    baseFilletRadius: float
 
     @property
     def baseRadius(self) -> float:
+        """Where the flank meets the sketch plane, or would without the base fillet."""
         return self.tip.radiusBelowTip(self.ribHeight)
 
+    @property
+    def footRadius(self) -> float:
+        return cutterprofile.footReach(self.tip, self.ribHeight, self.baseFilletRadius)
+
     def profileFace(self, position: Vector, across: Vector) -> Part.Face:
-        return Part.Face(cutterprofile.buildProfileWire(self.tip, self.ribHeight, self._mapper(position, across)))
+        mapper = self._mapper(position, across)
+        return Part.Face(cutterprofile.buildProfileWire(self.tip, self.ribHeight, mapper, self.baseFilletRadius))
 
     def halfProfileFace(self, position: Vector, across: Vector) -> Part.Face:
-        return Part.Face(cutterprofile.buildHalfProfileWire(self.tip, self.ribHeight, self._mapper(position, across)))
+        mapper = self._mapper(position, across)
+        return Part.Face(cutterprofile.buildHalfProfileWire(self.tip, self.ribHeight, mapper, self.baseFilletRadius))
+
+    def withoutBaseFillet(self) -> "RibCutter":
+        return replace(self, baseFilletRadius=0.0)
 
     def _mapper(self, position: Vector, across: Vector) -> cutterprofile.ProfilePointMapper:
         tipPosition = position + self.axis * self.ribHeight
@@ -76,30 +90,83 @@ class CornerFillet:
     clearingPass: object
 
 
-def buildRibs(pathEdges: list, sketchNormal: Vector, parameters: RibParameters) -> Part.Shape:
-    if not pathEdges:
-        raise ValueError("The path sketch has no lines.")
-    cutter = RibCutter(parameters.cutterTip, parameters.ribHeight, Vector(sketchNormal).normalize())
-    corners = [corner for position in _findJunctions(pathEdges) for corner in _cornersAt(position, pathEdges, cutter)]
-    pathPieces = [_sweepEdge(edge, cutter) for edge in pathEdges]
-    pathPieces += [_buildWedge(corner, cutter) for corner in corners if corner.angle > math.pi + ANGLE_TOLERANCE]
+def findBuriedJunctions(pathEdges: list, sketchNormal: Vector, baseShape) -> list:
+    """Where a rib ends or turns inside baseShape, the part the ribs stand on (or None), like a spoke run
+    into a boss: there is no face there to round it into, and its base fillet would only show through
+    the far side of the wall or in a bore."""
+    if baseShape is None:
+        return []
+    axis = _unit(sketchNormal)
+    wedgeJunctions = [
+        position
+        for position in _findJunctions(pathEdges)
+        if any(_hasWedge(corner) for corner in _cornersAt(position, pathEdges, axis))
+    ]
+    if not wedgeJunctions:
+        return []
+    probes = [position + axis * BURIED_PROBE_HEIGHT for position in wedgeJunctions]
+    # One boolean classifies every probe, six times as fast as a point-in-solid test for each.
+    probesInPart = baseShape.common(Part.makeCompound([Part.Vertex(probe) for probe in probes]))
+    probesInside = [vertex.Point for vertex in probesInPart.Vertexes]
+    return [
+        position
+        for position, probe in zip(wedgeJunctions, probes)
+        if any(_isSamePosition(probe, inside) for inside in probesInside)
+    ]
+
+
+def buildRibs(pathEdges: list, sketchNormal: Vector, parameters: RibParameters, buriedJunctions: list) -> Part.Shape:
+    cutter, corners, pathPieces = _sweepPaths(pathEdges, sketchNormal, parameters, buriedJunctions)
     sharpRibs = _fuse(pathPieces)
     if not _isPlausibleUnion(sharpRibs, pathPieces):
         raise ValueError("The ribs could not be built along this path sketch.")
     filletRadius = parameters.crossingFilletRadius
     if filletRadius <= 0.0:
         return sharpRibs
-    for overlap in FILLET_ARC_OVERLAPS:
-        fillets = _planCornerFillets(corners, cutter, filletRadius, overlap)
-        filletPieces = [piece for fillet in fillets for piece in _sweepCornerFillet(fillet, cutter)]
+    for attempt, overlap in enumerate(FILLET_ARC_OVERLAPS):
+        filletPieces = _sweepCornerFillets(corners, cutter, filletRadius, overlap)
         ribs = _fuse([sharpRibs] + filletPieces)
-        if _isPlausibleUnion(ribs, [sharpRibs] + filletPieces) and _containsAll(ribs, filletPieces):
+        # Only retries were seen to drop a fillet sweep silently, so only they pay for looking for one.
+        isRetry = attempt > 0
+        if _isPlausibleUnion(ribs, [sharpRibs] + filletPieces) and (not isRetry or _containsAll(ribs, filletPieces)):
             return ribs
     raise ValueError(
         "The rib crossings fillet radius {0} mm could not be built; a slightly different radius usually works.".format(
             filletRadius
         )
     )
+
+
+def buildRibPieces(pathEdges: list, sketchNormal: Vector, parameters: RibParameters, buriedJunctions: list) -> list:
+    """The sweeps the ribs are fused from, overlapping where they meet: quick enough for a preview."""
+    cutter, corners, pathPieces = _sweepPaths(pathEdges, sketchNormal, parameters, buriedJunctions)
+    if parameters.crossingFilletRadius <= 0.0:
+        return pathPieces
+    return pathPieces + _sweepCornerFillets(corners, cutter, parameters.crossingFilletRadius, FILLET_ARC_OVERLAPS[0])
+
+
+def _sweepPaths(pathEdges: list, sketchNormal: Vector, parameters: RibParameters, buriedJunctions: list) -> tuple:
+    """The cutter, the corners at every junction, and the sweeps along the paths and round their ends and turns."""
+    if not pathEdges:
+        raise ValueError("The path sketch has no lines.")
+    cutter = RibCutter(
+        parameters.cutterTip, parameters.ribHeight, Vector(sketchNormal).normalize(), parameters.baseFilletRadius
+    )
+    corners = [
+        corner for position in _findJunctions(pathEdges) for corner in _cornersAt(position, pathEdges, cutter.axis)
+    ]
+    pathPieces = [_sweepEdge(edge, cutter) for edge in pathEdges]
+    pathPieces += [
+        _buildWedge(corner, _wedgeCutter(cutter, corner.position, buriedJunctions))
+        for corner in corners
+        if _hasWedge(corner)
+    ]
+    return cutter, corners, pathPieces
+
+
+def _sweepCornerFillets(corners: list, cutter: RibCutter, filletRadius: float, overlap: float) -> list:
+    fillets = _planCornerFillets(corners, cutter, filletRadius, overlap)
+    return [piece for fillet in fillets for piece in _sweepCornerFillet(fillet, cutter)]
 
 
 def _fuse(pieces: list) -> Part.Shape:
@@ -127,15 +194,24 @@ def _sweepEdge(edge: Part.Edge, cutter: RibCutter) -> Part.Shape:
         return cutter.profileFace(start, _unit(direction.cross(cutter.axis))).extrude(direction)
     if isinstance(edge.Curve, Part.Circle):
         circle = edge.Curve
-        if circle.Radius <= cutter.baseRadius + POINT_TOLERANCE:
+        if circle.Radius <= cutter.footRadius + POINT_TOLERANCE:
             raise ValueError(
-                "An arc of radius {0:.2f} mm is tighter than half the rib width at its base ({1:.2f} mm).".format(
-                    circle.Radius, cutter.baseRadius
-                )
+                "An arc of radius {0:.2f} mm is tighter than half the rib width at its base, base fillet included "
+                "({1:.2f} mm).".format(circle.Radius, cutter.footRadius)
             )
         sweptAngle = math.degrees(edge.LastParameter - edge.FirstParameter)
         return cutter.profileFace(start, _unit(start - circle.Center)).revolve(circle.Center, circle.Axis, sweptAngle)
     raise ValueError("The path sketch may only hold lines and arcs, not a {0}.".format(type(edge.Curve).__name__))
+
+
+def _wedgeCutter(cutter: RibCutter, position: Vector, buriedJunctions: list) -> RibCutter:
+    if any(_isSamePosition(position, junction) for junction in buriedJunctions):
+        return cutter.withoutBaseFillet()
+    return cutter
+
+
+def _hasWedge(corner: Corner) -> bool:
+    return corner.angle > math.pi + ANGLE_TOLERANCE
 
 
 def _buildWedge(corner: Corner, cutter: RibCutter) -> Part.Shape:
@@ -148,6 +224,13 @@ def _buildWedge(corner: Corner, cutter: RibCutter) -> Part.Shape:
 
 def _planCornerFillets(corners: list, cutter: RibCutter, filletRadius: float, overlap: float) -> list:
     insideCorners = [corner for corner in corners if ANGLE_TOLERANCE < corner.angle < math.pi - ANGLE_TOLERANCE]
+    if insideCorners and cutter.footRadius >= cutter.baseRadius + filletRadius - POINT_TOLERANCE:
+        # The fillet arc's sweep would fold over the arc's centre.
+        raise ValueError(
+            "The rib crossings fillet radius {0} mm must be larger than the base fillet radius {1} mm.".format(
+                filletRadius, cutter.baseFilletRadius
+            )
+        )
     return [_planCornerFillet(corner, cutter, filletRadius, overlap) for corner in insideCorners]
 
 
@@ -228,11 +311,11 @@ def _offsetCurve(leavingPath: LeavingPath, position: Vector, towardsCorner: Vect
     return Part.Line(offsetPosition, offsetPosition + leavingPath.direction)
 
 
-def _cornersAt(position: Vector, pathEdges: list, cutter: RibCutter) -> list:
+def _cornersAt(position: Vector, pathEdges: list, axis: Vector) -> list:
     leavingPaths = _leavingPathsAt(position, pathEdges)
     reference = leavingPaths[0].direction
     angledPaths = sorted(
-        ((_angleAbout(cutter.axis, reference, path.direction), path) for path in leavingPaths), key=lambda pair: pair[0]
+        ((_angleAbout(axis, reference, path.direction), path) for path in leavingPaths), key=lambda pair: pair[0]
     )
     # The last corner closes the full turn back to the first path.
     nextAngledPaths = angledPaths[1:] + [(angledPaths[0][0] + 2.0 * math.pi, angledPaths[0][1])]

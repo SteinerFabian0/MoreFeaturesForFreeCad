@@ -31,6 +31,7 @@ class RibParameters:
     taperAngle: float = 1.0
     ribHeight: float = 5.0
     crossingFilletRadius: float = 0.0
+    baseFilletRadius: float = 0.5
 
     @property
     def maxCornerRadius(self) -> float:
@@ -74,6 +75,11 @@ PARAMETER_FIELDS = (
     ParameterField(
         "crossingFilletRadius", "Rib crossings vertical fillet radius", RIB_GROUP, LENGTH,
         tooltip="Rounds the vertical edges where ribs meet or cross; 0 leaves them sharp.",
+    ),
+    ParameterField(
+        "baseFilletRadius", "Rib base fillet radius", RIB_GROUP, LENGTH,
+        tooltip="Rounds the ribs into the face they stand on; 0 leaves the edge sharp. Injection moulding "
+        "guidelines suggest 0.25 to 0.4 times the wall thickness the ribs stand on.",
     ),
 )
 

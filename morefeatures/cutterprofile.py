@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Fabian Steiner
 
 # The silhouette of a cutter with a ball, flat or corner radius tip whose flanks taper outward
-# above the tip. The ribs are swept with it, and a boss gusset is the ball cutter's silhouette.
+# above the tip, optionally flaring out into a concave fillet at its foot. The ribs are swept with
+# it, and a boss gusset is the ball cutter's silhouette.
 
 import math
 from dataclasses import dataclass
@@ -12,6 +13,10 @@ import Part
 from FreeCAD import Vector
 
 POINT_TOLERANCE = 1e-9
+# The foot fillet's circle dips this fraction of its radius below the foot, so it meets the face the
+# cutter's foot stands on at about 8 degrees and its knife-edged end lies inside that face's part.
+# Exactly tangent, that end lies on the face itself and fuses wrongly now and then.
+FOOT_FILLET_SINK = 0.01
 
 # Maps a profile point (across the axis, height relative to the tip) into 3D.
 ProfilePointMapper = Callable[[float, float], Vector]
@@ -37,9 +42,18 @@ class CutterTip:
         return flankStartRadius + (depth - self.tangentDepth) * math.tan(self.taper)
 
 
-def buildProfileWire(tip: CutterTip, depth: float, toPoint: ProfilePointMapper) -> Part.Wire:
-    """Both flanks, tip on height 0, closed straight across at height -depth."""
-    top, *rightSide = _buildRightOutline(tip, depth)
+def footReach(tip: CutterTip, depth: float, footFilletRadius: float) -> float:
+    """How far the profile reaches out from the axis at its foot, foot fillet included."""
+    footDepth = _footDepth(depth, footFilletRadius)
+    return tip.radiusBelowTip(footDepth) + footFilletRadius * (1.0 - math.sin(tip.taper)) / math.cos(tip.taper)
+
+
+def buildProfileWire(
+    tip: CutterTip, depth: float, toPoint: ProfilePointMapper, footFilletRadius: float = 0.0
+) -> Part.Wire:
+    """Both flanks, tip on height 0, closed straight across at height -depth. A foot fillet
+    rounds each flank into a face at height -depth, sinking the foot a little below it."""
+    top, *rightSide = _buildRightOutline(tip, depth, footFilletRadius)
     tipCentre, *_, topEnd = top
     # One edge across the tip rather than a pair meeting on the axis.
     wholeTop = (_mirrored(topEnd), tipCentre, topEnd) if len(top) == 3 else (_mirrored(topEnd), topEnd)
@@ -48,31 +62,54 @@ def buildProfileWire(tip: CutterTip, depth: float, toPoint: ProfilePointMapper) 
     return _toWire([wholeTop] + rightSide + [(footRight, _mirrored(footRight))] + leftSide, toPoint)
 
 
-def buildHalfProfileWire(tip: CutterTip, depth: float, toPoint: ProfilePointMapper) -> Part.Wire:
+def buildHalfProfileWire(
+    tip: CutterTip, depth: float, toPoint: ProfilePointMapper, footFilletRadius: float = 0.0
+) -> Part.Wire:
     """The side at positive across only, closed along the axis: revolved, it is the cutter."""
-    outline = _buildRightOutline(tip, depth)
+    outline = _buildRightOutline(tip, depth, footFilletRadius)
     footRight = outline[-1][-1]
-    footOnAxis = (0.0, -depth)
+    footOnAxis = (0.0, footRight[1])
     return _toWire(outline + [(footRight, footOnAxis), (footOnAxis, (0.0, 0.0))], toPoint)
 
 
-def _buildRightOutline(tip: CutterTip, depth: float) -> list:
+def _buildRightOutline(tip: CutterTip, depth: float, footFilletRadius: float) -> list:
     """Segments from the tip centre out to the foot: 2 points for a line, 3 for an arc through
     its middle point."""
     hasFlat = tip.roundCentreRadius > POINT_TOLERANCE
     hasRound = tip.roundRadius > POINT_TOLERANCE
+    hasFootFillet = footFilletRadius > POINT_TOLERANCE
     if not hasFlat and not hasRound:
         raise ValueError("The cutter tip has no size.")
+    footDepth = _footDepth(depth, footFilletRadius)
+    flankDepth = footDepth - footFilletRadius * (1.0 - math.sin(tip.taper))
+    if hasFootFillet and flankDepth <= tip.tangentDepth + POINT_TOLERANCE:
+        raise ValueError("The base fillet radius {0} mm does not fit below the rounded tip.".format(footFilletRadius))
     flatEnd = (tip.roundCentreRadius, 0.0)
     outline = [((0.0, 0.0), flatEnd)] if hasFlat else []
     roundEnd = flatEnd
     if hasRound:
-        roundEndAngle = _roundAngleAtDepth(tip, min(depth, tip.tangentDepth))
+        roundEndAngle = _roundAngleAtDepth(tip, min(flankDepth, tip.tangentDepth))
         roundEnd = _pointOnRound(tip, roundEndAngle)
         outline.append((flatEnd, _pointOnRound(tip, roundEndAngle / 2.0), roundEnd))
-    if depth > tip.tangentDepth + POINT_TOLERANCE:
-        outline.append((roundEnd, (tip.radiusBelowTip(depth), -depth)))
+    flankEnd = (tip.radiusBelowTip(flankDepth), -flankDepth)
+    if flankDepth > tip.tangentDepth + POINT_TOLERANCE:
+        outline.append((roundEnd, flankEnd))
+    if hasFootFillet:
+        outline.append(_buildFootFillet(tip, flankEnd, footDepth, footFilletRadius))
     return outline
+
+
+def _footDepth(depth: float, footFilletRadius: float) -> float:
+    return depth + footFilletRadius * FOOT_FILLET_SINK
+
+
+def _buildFootFillet(tip: CutterTip, flankEnd: tuple, footDepth: float, radius: float) -> tuple:
+    """Concave, from the flank down to the foot line at height -footDepth, tangent to both."""
+    centre = (flankEnd[0] + radius * math.cos(tip.taper), -footDepth + radius)
+    towardsMiddle = (-math.cos(tip.taper), -(1.0 + math.sin(tip.taper)))
+    middleScale = radius / math.hypot(*towardsMiddle)
+    middle = (centre[0] + towardsMiddle[0] * middleScale, centre[1] + towardsMiddle[1] * middleScale)
+    return (flankEnd, middle, (centre[0], -footDepth))
 
 
 def _roundAngleAtDepth(tip: CutterTip, depth: float) -> float:
